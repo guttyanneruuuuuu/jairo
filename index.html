@@ -442,7 +442,7 @@
         const PLAYER_TOUCH_OFFSET = 60;     // finger -> ship offset on mobile
         const HISCORE_KEY = 'galaxyDrift_hiscore_v2';
         const TILT_DEADZONE = 0.08;
-        const TILT_SMOOTHING_FACTOR = 0.32;
+        const TILT_SMOOTHING_FACTOR = 0.32;   // higher than v1 for faster recovery from sudden dodge inputs
         const TILT_MAX_DEG = 14;              // reduced from ±18deg to reach full tilt response sooner
         const ITEM_SPAWN_AVOID_RADIUS = 90;
         const SLOW_CHARGE_BASE_INTERVAL = 3600;
@@ -893,6 +893,7 @@
             const t = elapsed / 1000; // seconds
             const p = Math.min(1, t / 85);
             speedMul = 1 + p * 1.65;               // caps around 2.65x
+            // Keep pressure high but avoid early overwhelm; scales with progression p (0 -> 1).
             const obstacleRate = 0.015 + p * 0.02;
             const energyRate = 0.00125 - p * 0.00012;
             const defensePity = Math.min(1.7, timeSinceDefensePickup / 16000);
