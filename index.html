@@ -442,8 +442,8 @@
         const PLAYER_TOUCH_OFFSET = 60;     // finger -> ship offset on mobile
         const HISCORE_KEY = 'galaxyDrift_hiscore_v2';
         const TILT_DEADZONE = 0.08;
-        const TILT_RESPONSE_SPEED = 0.32;
-        const TILT_MAX_DEG = 14;              // degrees at which tilt input reaches full scale
+        const TILT_SMOOTHING_FACTOR = 0.32;
+        const TILT_MAX_DEG = 14;              // reduced from ±18deg to reach full tilt response sooner
         const ITEM_SPAWN_AVOID_RADIUS = 90;
         const SLOW_CHARGE_BASE_INTERVAL = 3600;
         const SLOW_CHARGE_MAX_SCALE = 2800;
@@ -760,8 +760,8 @@
             const rawX = Math.max(-1, Math.min(1, gx / TILT_MAX_DEG));
             const rawY = Math.max(-1, Math.min(1, gy / TILT_MAX_DEG));
             const dz = (v) => Math.abs(v) < TILT_DEADZONE ? 0 : v;
-            tiltX += (dz(rawX) - tiltX) * TILT_RESPONSE_SPEED;
-            tiltY += (dz(rawY) - tiltY) * TILT_RESPONSE_SPEED;
+            tiltX += (dz(rawX) - tiltX) * TILT_SMOOTHING_FACTOR;
+            tiltY += (dz(rawY) - tiltY) * TILT_SMOOTHING_FACTOR;
         }
 
         async function enableTilt() {
