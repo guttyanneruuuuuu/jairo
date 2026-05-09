@@ -443,10 +443,17 @@
         const HISCORE_KEY = 'galaxyDrift_hiscore_v2';
         const TILT_DEADZONE = 0.08;
         const TILT_SMOOTH = 0.22;
+        const ITEM_SPAWN_AVOID_RADIUS = 90;
+        const SLOW_CHARGE_BASE_INTERVAL = 3600;
+        const SLOW_CHARGE_MAX_SCALE = 2800;
+        const SLOW_CHARGE_SCALE_FACTOR = 0.02;
+        const ENERGY_BASE_SCORE = 95;
+        const ENERGY_COMBO_MULTIPLIER = 0.11;
+        const ENERGY_MAX_SCORE = 720;
 
         const SUPPORTED_LOCALES = ['ja', 'en'];
         const localeParam = new URLSearchParams(window.location.search).get('locale');
-        const browserLocale = (navigator.language || 'en').toLowerCase();
+        const browserLocale = String(navigator.language || 'en').toLowerCase();
         const fallbackLocale = browserLocale.startsWith('ja') ? 'ja' : 'en';
         const locale = SUPPORTED_LOCALES.includes(localeParam) ? localeParam : fallbackLocale;
         const I18N = {
@@ -976,7 +983,7 @@
 
         function spawnItem(type) {
             const sizes = { energy: 11, shield: 17, magnet: 15, slow: 15 };
-            const avoidRadius = type === 'energy' ? 0 : 90;
+            const avoidRadius = type === 'energy' ? 0 : ITEM_SPAWN_AVOID_RADIUS;
             items.push({
                 type,
                 x: randomSpawnX(player.x, avoidRadius),
@@ -1036,7 +1043,7 @@
             score += 0.04 * dtMs * speedMul;
             if (score >= nextSlowChargeScore) {
                 slowCharges = Math.min(3, slowCharges + 1);
-                nextSlowChargeScore += 3600 + Math.min(2800, elapsed * 0.02);
+                nextSlowChargeScore += SLOW_CHARGE_BASE_INTERVAL + Math.min(SLOW_CHARGE_MAX_SCALE, elapsed * SLOW_CHARGE_SCALE_FACTOR);
                 updateSlowBtn();
                 spawnFloat(player.x, player.y - 42, '+ SLOW', varColor('--slow'));
             }
@@ -1190,7 +1197,7 @@
                 if (dist < PLAYER_RADIUS + it.size + 6) {
                     if (it.type === 'energy') {
                         addCombo();
-                        const gain = Math.min(720, Math.floor(95 * (1 + combo * 0.11)));
+                        const gain = Math.min(ENERGY_MAX_SCORE, Math.floor(ENERGY_BASE_SCORE * (1 + combo * ENERGY_COMBO_MULTIPLIER)));
                         score += gain;
                         sfx.pickup();
                         createExplosion(it.x, it.y, varColor('--secondary'), 14, 6);
