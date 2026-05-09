@@ -442,7 +442,8 @@
         const PLAYER_TOUCH_OFFSET = 60;     // finger -> ship offset on mobile
         const HISCORE_KEY = 'galaxyDrift_hiscore_v2';
         const TILT_DEADZONE = 0.08;
-        const TILT_SMOOTH = 0.22;
+        const TILT_SMOOTH = 0.32;
+        const TILT_MAX_DEG = 14;
         const ITEM_SPAWN_AVOID_RADIUS = 90;
         const SLOW_CHARGE_BASE_INTERVAL = 3600;
         const SLOW_CHARGE_MAX_SCALE = 2800;
@@ -755,9 +756,9 @@
             }
             const gx = (e.gamma || 0) - tiltCalibX;   // left/right
             const gy = (e.beta  || 0) - tiltCalibY;   // forward/back
-            // Normalize: ±18deg = max
-            const rawX = Math.max(-1, Math.min(1, gx / 18));
-            const rawY = Math.max(-1, Math.min(1, gy / 18));
+            // Normalize: ±TILT_MAX_DEG = max
+            const rawX = Math.max(-1, Math.min(1, gx / TILT_MAX_DEG));
+            const rawY = Math.max(-1, Math.min(1, gy / TILT_MAX_DEG));
             const dz = (v) => Math.abs(v) < TILT_DEADZONE ? 0 : v;
             tiltX += (dz(rawX) - tiltX) * TILT_SMOOTH;
             tiltY += (dz(rawY) - tiltY) * TILT_SMOOTH;
@@ -892,15 +893,15 @@
             const t = elapsed / 1000; // seconds
             const p = Math.min(1, t / 85);
             speedMul = 1 + p * 1.65;               // caps around 2.65x
-            const obstacleRate = 0.032 + p * 0.042;
+            const obstacleRate = 0.00135 + p * 0.00125;
             const energyRate = 0.00125 - p * 0.00012;
-            const defensePity = Math.min(1.4, timeSinceDefensePickup / 18000);
-            const shieldRate = 0.000075 + defensePity * 0.000035;
+            const defensePity = Math.min(2.0, timeSinceDefensePickup / 14000);
+            const shieldRate = 0.00009 + defensePity * 0.00005;
             const magnetRate = 0.00005 + p * 0.00001;
-            const slowRate = 0.00004 + defensePity * 0.00003;
+            const slowRate = 0.000055 + defensePity * 0.000045;
 
             // Obstacles: spawn rate scales with speedMul, with patterns
-            spawnAccObs += dt * (obstacleRate + speedMul * 0.016);
+            spawnAccObs += dt * (obstacleRate + speedMul * 0.00055);
             while (spawnAccObs > 1) {
                 spawnAccObs -= 1;
                 spawnObstacle(t);
@@ -1063,14 +1064,14 @@
                 ty = player.y + (ky / d) * 280;
             } else if (controlMode === 'tilt') {
                 // tilt -> velocity additive
-                tx = player.x + tiltX * 240;
-                ty = player.y + tiltY * 200;
+                tx = player.x + tiltX * 300;
+                ty = player.y + tiltY * 250;
             } else {
                 if (hasTarget) { tx = targetX; ty = targetY; }
             }
 
             // Spring-damper toward target (frame independent)
-            const k = controlMode === 'tilt' ? 8 : 14;   // stiffness
+            const k = controlMode === 'tilt' ? 11 : 14;   // stiffness
             const damp = 0.86;
             const ax = (tx - player.x) * k;
             const ay = (ty - player.y) * k;
