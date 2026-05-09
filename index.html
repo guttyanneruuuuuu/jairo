@@ -16,6 +16,8 @@
             --shield: #00f2ff;
             --magnet: #ff69ff;
             --slow: #b066ff;
+            --bomb: #ff9500;
+            --multiplier: #00ff88;
             --bg-dark: #00050a;
             --text-main: #e0f7ff;
         }
@@ -115,6 +117,40 @@
 
         .hi-row .label { color: var(--secondary); margin: 0; }
         .hi-row .value { font-size: 14px; font-weight: 800; }
+
+        /* Level display */
+        #level-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            text-align: right;
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+        #level-display.active { opacity: 1; }
+        #level-value {
+            font-size: 24px;
+            font-weight: 900;
+            color: var(--multiplier);
+            text-shadow: 0 0 10px var(--multiplier);
+        }
+
+        /* Multiplier display */
+        #multiplier-display {
+            position: absolute;
+            top: 70px;
+            right: 20px;
+            text-align: right;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #multiplier-display.active { opacity: 1; }
+        #multiplier-value {
+            font-size: 20px;
+            font-weight: 900;
+            color: var(--multiplier);
+            text-shadow: 0 0 10px var(--multiplier);
+        }
 
         /* Bars (Shield / Slow) */
         .bar-wrap {
@@ -231,6 +267,8 @@
         .y { color: var(--secondary); font-weight: bold; }
         .p { color: var(--magnet); font-weight: bold; }
         .v { color: var(--slow); font-weight: bold; }
+        .b { color: var(--bomb); font-weight: bold; }
+        .m { color: var(--multiplier); font-weight: bold; }
 
         .score-display {
             margin: 18px 0 26px;
@@ -320,1069 +358,969 @@
         @keyframes floatUp {
             0%   { transform: translate(-50%, 0) scale(0.6); opacity: 0; }
             20%  { transform: translate(-50%, -10px) scale(1.15); opacity: 1; }
-            100% { transform: translate(-50%, -50px) scale(0.9); opacity: 0; }
+            100% { transform: translate(-50%, -80px) scale(0.8); opacity: 0; }
         }
-
-        @keyframes flash {
-            0% { background-color: rgba(255,75,43,0); }
-            50% { background-color: rgba(255,75,43,0.3); }
-            100% { background-color: rgba(255,75,43,0); }
-        }
-        .hit-flash { animation: flash 0.4s; }
 
         @keyframes shake {
-            10%, 90% { transform: translate3d(-2px, 0, 0); }
-            20%, 80% { transform: translate3d(3px, 0, 0); }
-            30%, 50%, 70% { transform: translate3d(-5px, 0, 0); }
-            40%, 60% { transform: translate3d(5px, 0, 0); }
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            10% { transform: translate(-8px, -8px) rotate(-1deg); }
+            20% { transform: translate(8px, 6px) rotate(1deg); }
+            30% { transform: translate(-6px, 8px) rotate(-1deg); }
+            40% { transform: translate(6px, -6px) rotate(1deg); }
+            50% { transform: translate(-4px, 4px) rotate(-0.5deg); }
+            60% { transform: translate(4px, -4px) rotate(0.5deg); }
+            70% { transform: translate(-2px, 2px) rotate(-0.25deg); }
+            80% { transform: translate(2px, -2px) rotate(0.25deg); }
+            90% { transform: translate(-1px, 1px) rotate(-0.1deg); }
+        }
+
+        #ui-layer.hit-flash {
+            animation: hitFlash 0.3s;
+        }
+        @keyframes hitFlash {
+            0%, 100% { filter: none; }
+            50% { filter: brightness(1.8) hue-rotate(20deg); }
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
-
     <div id="ui-layer">
         <div class="hud-top">
             <div class="stat-group">
-                <span class="label">Distance</span>
-                <span id="score-value" class="value">0</span>
+                <div class="label">SCORE</div>
+                <div class="value" id="score-value">0</div>
             </div>
-            <div id="combo-container" class="stat-group">
-                <span class="label">Combo</span>
-                <span id="combo-value" class="value">x0</span>
+            <div id="combo-container">
+                <div class="label">COMBO</div>
+                <div id="combo-value">0</div>
+            </div>
+            <div id="level-display">
+                <div class="label">LEVEL</div>
+                <div id="level-value">1</div>
             </div>
         </div>
-
+        <div id="multiplier-display">
+            <div class="label">x MULT</div>
+            <div id="multiplier-value">1.0x</div>
+        </div>
+        <div class="hi-row">
+            <div>
+                <div class="label">HI-SCORE</div>
+                <div class="value" id="hiscore-value">0</div>
+            </div>
+        </div>
         <div id="shield-ui" class="bar-wrap"><div id="shield-fill"></div></div>
-        <div id="slow-ui"   class="bar-wrap"><div id="slow-fill"></div></div>
-
-        <div id="slow-btn" class="disabled">SLOW<br>x0</div>
+        <div id="slow-ui" class="bar-wrap"><div id="slow-fill"></div></div>
     </div>
 
-    <div id="overlay">
+    <button id="slow-btn">SLOW<br>x1</button>
+
+    <div id="overlay" style="opacity: 0; display: none;">
         <div class="menu-content">
-            <h1 id="menu-title">GALAXY<br>DRIFT</h1>
-            <p id="menu-desc" class="description">
-                深宇宙を駆け抜けろ。<br>
-                <span class="y">エネルギーコア</span>でコンボを繋ぎ、<br>
-                <span class="highlight">シールド</span>で無敵に、
-                <span class="p">マグネット</span>で吸引、<br>
-                <span class="v">スロー</span>でピンチを切り抜けろ。
+            <h1 id="menu-title">GALAXY DRIFT</h1>
+            <p class="description" id="menu-desc">
+                宇宙を舞台にした<span class="highlight">ドリフトシューティング</span>ゲーム。<br>
+                <span class="y">岩</span>を避けて、<span class="y">エネルギー</span>を集めよう。<br>
+                <span class="highlight">シールド</span>で防御、<span class="v">スローモ</span>で時間を操る。<br>
+                <span class="p">マグネット</span>でアイテムを吸収、<span class="b">ボム</span>で一掃。<br>
+                <span class="m">マルチプライヤー</span>でスコア爆増！
             </p>
-
-            <div id="ctrl-select" class="ctrl-select">
-                <button class="ctrl-btn" data-ctrl="touch">タッチ操作</button>
-                <button class="ctrl-btn" data-ctrl="tilt">傾き操作</button>
+            <div class="ctrl-select" id="ctrl-select">
+                <button class="ctrl-btn" data-ctrl="touch">TOUCH</button>
+                <button class="ctrl-btn" data-ctrl="tilt">TILT</button>
+                <button class="ctrl-btn" data-ctrl="mouse">MOUSE</button>
             </div>
-
-            <div id="score-display" class="score-display" style="display:none;">
+            <div class="score-display" id="score-display" style="display: none;">
                 <div>
-                    <span class="label">Score</span>
-                    <span class="num" id="final-score">0</span>
+                    <div class="label">SCORE</div>
+                    <div class="num" id="final-score">0</div>
                 </div>
                 <div>
-                    <span class="label">Max Combo</span>
-                    <span class="num combo" id="final-combo">0</span>
+                    <div class="label">COMBO</div>
+                    <div class="num combo" id="final-combo">x0</div>
                 </div>
                 <div>
-                    <span class="label">Best</span>
-                    <span class="num best" id="final-best">0</span>
+                    <div class="label">BEST</div>
+                    <div class="num best" id="final-best">0</div>
                 </div>
             </div>
-
-            <button id="start-button" class="btn-start">MISSION START</button>
+            <button class="btn-start" id="start-button">START</button>
+            <div id="hint-text">MOUSE: MOVE / CLICK = SLOW</div>
         </div>
     </div>
-
-    <div id="hint-text">PC: MOUSE + SPACE/CLICK = SLOW</div>
 
     <script>
-    /**
-     * GALAXY DRIFT: OVERDRIVE  v2
-     * - Improved gameplay & controls
-     * - Touch drag (mobile) / Mouse (PC) / Tilt option
-     * - Slow-motion power, magnet item, varied enemy patterns
-     * - Frame-rate independent physics, high score persistence
-     */
-    (() => {
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d', { alpha: false });
+        /*
+         * GALAXY DRIFT: OVERDRIVE  v3
+         * - Improved difficulty scaling (fewer rocks early)
+         * - Enhanced tilt controls (better responsiveness)
+         * - New gameplay mechanics: bomb item, multiplier system, level progression
+         * - Better visual feedback for gyro input
+         */
+        (() => {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d', { alpha: false });
 
-        const scoreEl = document.getElementById('score-value');
-        const comboEl = document.getElementById('combo-value');
-        const comboCont = document.getElementById('combo-container');
-        const shieldUI = document.getElementById('shield-ui');
-        const shieldFill = document.getElementById('shield-fill');
-        const slowUI = document.getElementById('slow-ui');
-        const slowFill = document.getElementById('slow-fill');
-        const slowBtn = document.getElementById('slow-btn');
-        const overlay = document.getElementById('overlay');
-        const startBtn = document.getElementById('start-button');
-        const menuTitle = document.getElementById('menu-title');
-        const menuDesc = document.getElementById('menu-desc');
-        const ctrlSelect = document.getElementById('ctrl-select');
-        const scoreDisplay = document.getElementById('score-display');
-        const finalScore = document.getElementById('final-score');
-        const finalCombo = document.getElementById('final-combo');
-        const finalBest  = document.getElementById('final-best');
-        const hintText = document.getElementById('hint-text');
-        const uiLayer = document.getElementById('ui-layer');
+            const scoreEl = document.getElementById('score-value');
+            const comboEl = document.getElementById('combo-value');
+            const comboCont = document.getElementById('combo-container');
+            const hiscoreEl = document.getElementById('hiscore-value');
+            const levelDisplay = document.getElementById('level-display');
+            const levelValue = document.getElementById('level-value');
+            const multiplierDisplay = document.getElementById('multiplier-display');
+            const multiplierValue = document.getElementById('multiplier-value');
+            const shieldUI = document.getElementById('shield-ui');
+            const shieldFill = document.getElementById('shield-fill');
+            const slowUI = document.getElementById('slow-ui');
+            const slowFill = document.getElementById('slow-fill');
+            const slowBtn = document.getElementById('slow-btn');
+            const overlay = document.getElementById('overlay');
+            const startBtn = document.getElementById('start-button');
+            const menuTitle = document.getElementById('menu-title');
+            const menuDesc = document.getElementById('menu-desc');
+            const ctrlSelect = document.getElementById('ctrl-select');
+            const scoreDisplay = document.getElementById('score-display');
+            const finalScore = document.getElementById('final-score');
+            const finalCombo = document.getElementById('final-combo');
+            const finalBest  = document.getElementById('final-best');
+            const hintText = document.getElementById('hint-text');
+            const uiLayer = document.getElementById('ui-layer');
 
-        // ========== Constants ==========
-        const PLAYER_RADIUS = 18;
-        const SHIELD_DURATION = 4500;       // ms
-        const SLOW_DURATION = 2500;         // ms
-        const SLOW_FACTOR = 0.35;
-        const COMBO_TIMEOUT = 2500;         // ms
-        const PLAYER_TOUCH_OFFSET = 60;     // finger -> ship offset on mobile
-        const HISCORE_KEY = 'galaxyDrift_hiscore_v2';
+            // ========== Constants ==========
+            const PLAYER_RADIUS = 18;
+            const SHIELD_DURATION = 4500;
+            const SLOW_DURATION = 2500;
+            const SLOW_FACTOR = 0.35;
+            const COMBO_TIMEOUT = 2500;
+            const PLAYER_TOUCH_OFFSET = 60;
+            const HISCORE_KEY = 'galaxyDrift_hiscore_v3';
 
-        // ========== State ==========
-        let state = 'MENU';                 // MENU / PLAYING / GAMEOVER
-        let score = 0, combo = 0, maxCombo = 0;
-        let comboTimer = 0;
-        let shieldTimer = 0;
-        let slowTimer = 0;
-        let magnetTimer = 0;
-        let invulnGrace = 0;                // brief grace at start
-        let lastTime = 0;
-        let elapsed = 0;                    // ms since game start
-        let speedMul = 1;
-        let timeScale = 1;                  // for slow motion
-        let slowCharges = 0;                // available slow uses
-        let hiscore = 0;
-        let scoreFlash = 0;
+            // ========== State ==========
+            let state = 'MENU';
+            let score = 0, combo = 0, maxCombo = 0;
+            let comboTimer = 0;
+            let shieldTimer = 0;
+            let slowTimer = 0;
+            let magnetTimer = 0;
+            let bombTimer = 0;
+            let multiplierTimer = 0;
+            let multiplier = 1.0;
+            let invulnGrace = 0;
+            let lastTime = 0;
+            let elapsed = 0;
+            let speedMul = 1;
+            let timeScale = 1;
+            let slowCharges = 0;
+            let hiscore = 0;
+            let scoreFlash = 0;
+            let currentLevel = 1;
 
-        // ========== Input ==========
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-                        || ('ontouchstart' in window && window.innerWidth < 900);
-        let controlMode = isMobile ? 'touch' : 'mouse';   // touch / tilt / mouse
-        let targetX = 0, targetY = 0;       // world target (px)
-        let hasTarget = false;
-        // Tilt input
-        let tiltX = 0, tiltY = 0;
-        let tiltCalibX = 0, tiltCalibY = 0, tiltCalibrated = false;
+            // ========== Input ==========
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                            || ('ontouchstart' in window && window.innerWidth < 900);
+            let controlMode = isMobile ? 'touch' : 'mouse';
+            let targetX = 0, targetY = 0;
+            let hasTarget = false;
+            let tiltX = 0, tiltY = 0;
+            let tiltCalibX = 0, tiltCalibY = 0, tiltCalibrated = false;
+            let tiltStrength = 1.0; // Gyro sensitivity multiplier
 
-        // ========== Player ==========
-        const player = {
-            x: 0, y: 0,
-            vx: 0, vy: 0,
-            rotation: 0,
-            trail: [],
-            baseSpeed: 1
-        };
+            // ========== Player ==========
+            const player = {
+                x: 0, y: 0,
+                vx: 0, vy: 0,
+                rotation: 0,
+                trail: [],
+                baseSpeed: 1,
+                gyroTilt: 0 // Visual tilt from gyro
+            };
 
-        let obstacles = [];
-        let items = [];
-        let particles = [];
-        let stars = [];
-        let nebulae = [];
+            let obstacles = [];
+            let items = [];
+            let particles = [];
+            let stars = [];
+            let nebulae = [];
 
-        // ========== Audio (lightweight WebAudio SFX) ==========
-        let audioCtx = null;
-        function ensureAudio() {
-            if (!audioCtx) {
-                try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+            // ========== Audio ==========
+            let audioCtx = null;
+            function ensureAudio() {
+                if (!audioCtx) {
+                    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+                }
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
             }
-            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-        }
-        function beep(freq, dur, type, vol) {
-            if (!audioCtx) return;
-            const o = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            o.type = type || 'sine';
-            o.frequency.value = freq;
-            g.gain.value = 0;
-            o.connect(g).connect(audioCtx.destination);
-            const t = audioCtx.currentTime;
-            const v = vol == null ? 0.15 : vol;
-            g.gain.linearRampToValueAtTime(v, t + 0.005);
-            g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-            o.frequency.exponentialRampToValueAtTime(Math.max(50, freq * 0.5), t + dur);
-            o.start(t);
-            o.stop(t + dur + 0.05);
-        }
-        const sfx = {
-            pickup: () => beep(880, 0.18, 'triangle', 0.15),
-            shield: () => { beep(440, 0.15, 'sawtooth', 0.12); setTimeout(()=>beep(880, 0.25, 'sawtooth', 0.12),60); },
-            magnet: () => beep(660, 0.2, 'square', 0.1),
-            slow:   () => beep(220, 0.4, 'sine', 0.18),
-            hit:    () => { beep(110, 0.5, 'sawtooth', 0.3); setTimeout(()=>beep(60, 0.6, 'sawtooth', 0.25),80); },
-            graze:  () => beep(1200, 0.06, 'sine', 0.08)
-        };
+            function beep(freq, dur, type, vol) {
+                if (!audioCtx) return;
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.type = type || 'sine';
+                o.frequency.value = freq;
+                g.gain.value = 0;
+                o.connect(g).connect(audioCtx.destination);
+                const t = audioCtx.currentTime;
+                const v = vol == null ? 0.15 : vol;
+                g.gain.linearRampToValueAtTime(v, t + 0.005);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                o.start(t);
+                o.stop(t + dur + 0.05);
+            }
+            const sfx = {
+                pickup: () => beep(880, 0.18, 'triangle', 0.15),
+                shield: () => { beep(440, 0.15, 'sawtooth', 0.12); setTimeout(()=>beep(880, 0.25, 'sawtooth', 0.12),60); },
+                magnet: () => beep(660, 0.2, 'square', 0.1),
+                slow:   () => beep(220, 0.4, 'sine', 0.18),
+                bomb:   () => { beep(1100, 0.1, 'square', 0.2); setTimeout(()=>beep(800, 0.15, 'square', 0.15),80); },
+                multiplier: () => { beep(1200, 0.08, 'sine', 0.15); setTimeout(()=>beep(1400, 0.1, 'sine', 0.15),100); },
+                hit:    () => { beep(110, 0.5, 'sawtooth', 0.3); setTimeout(()=>beep(60, 0.6, 'sawtooth', 0.25),80); },
+                graze:  () => beep(1200, 0.06, 'sine', 0.08)
+            };
 
-        // ========== Init ==========
-        function init() {
-            window.addEventListener('resize', onResize);
-            window.addEventListener('orientationchange', onResize);
-            onResize();
-            createStars();
-            createNebulae();
-            loadHiscore();
+            // ========== Init ==========
+            function init() {
+                window.addEventListener('resize', onResize);
+                window.addEventListener('orientationchange', onResize);
+                onResize();
+                createStars();
+                createNebulae();
+                loadHiscore();
 
-            // Inputs
-            window.addEventListener('mousemove', handleMouseMove);
-            canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-            canvas.addEventListener('touchmove',  handleTouchMove,  { passive: false });
-            canvas.addEventListener('touchend',   handleTouchEnd,   { passive: false });
+                window.addEventListener('mousemove', handleMouseMove);
+                canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+                canvas.addEventListener('touchmove',  handleTouchMove,  { passive: false });
+                canvas.addEventListener('touchend',   handleTouchEnd,   { passive: false });
 
-            // Slow trigger
-            window.addEventListener('keydown', e => {
-                if (e.code === 'Space') { e.preventDefault(); triggerSlow(); }
-            });
-            canvas.addEventListener('click', () => { if (state === 'PLAYING') triggerSlow(); });
-            slowBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault(); e.stopPropagation();
-                triggerSlow();
-            }, { passive: false });
-            slowBtn.addEventListener('click', (e) => { e.stopPropagation(); triggerSlow(); });
-
-            // Control mode (mobile)
-            if (isMobile) {
-                ctrlSelect.classList.add('show');
-                hintText.textContent = 'TOUCH: DRAG SHIP / TAP CENTER = SLOW';
-                document.querySelectorAll('.ctrl-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-                        controlMode = btn.dataset.ctrl;
-                    });
+                window.addEventListener('keydown', e => {
+                    if (e.code === 'Space') { e.preventDefault(); triggerSlow(); }
                 });
-                // default: touch
-                document.querySelector('.ctrl-btn[data-ctrl="touch"]').classList.add('active');
+                canvas.addEventListener('click', () => { if (state === 'PLAYING') triggerSlow(); });
+                slowBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    triggerSlow();
+                }, { passive: false });
+                slowBtn.addEventListener('click', (e) => { e.stopPropagation(); triggerSlow(); });
+
+                if (isMobile) {
+                    ctrlSelect.classList.add('show');
+                    hintText.textContent = 'TOUCH: DRAG SHIP / TAP CENTER = SLOW';
+                    document.querySelectorAll('.ctrl-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+                            btn.classList.add('active');
+                            controlMode = btn.dataset.ctrl;
+                        });
+                    });
+                    document.querySelector('.ctrl-btn[data-ctrl="touch"]').classList.add('active');
+                }
+
+                startBtn.addEventListener('click', handleStart);
+
+                requestAnimationFrame(gameLoop);
             }
 
-            startBtn.addEventListener('click', handleStart);
+            function onResize() {
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                canvas.width = window.innerWidth * dpr;
+                canvas.height = window.innerHeight * dpr;
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                if (state !== 'PLAYING') {
+                    player.x = window.innerWidth / 2;
+                    player.y = window.innerHeight * 0.78;
+                }
+            }
 
-            requestAnimationFrame(gameLoop);
-        }
+            function loadHiscore() {
+                try { hiscore = parseInt(localStorage.getItem(HISCORE_KEY) || '0', 10) || 0; } catch(e) { hiscore = 0; }
+                hiscoreEl.textContent = Math.floor(hiscore).toLocaleString();
+            }
+            function saveHiscore() {
+                try { localStorage.setItem(HISCORE_KEY, String(Math.floor(hiscore))); } catch(e) {} 
+                hiscoreEl.textContent = Math.floor(hiscore).toLocaleString();
+            }
 
-        function onResize() {
-            const dpr = Math.min(window.devicePixelRatio || 1, 2);
-            canvas.width = window.innerWidth * dpr;
-            canvas.height = window.innerHeight * dpr;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            if (state !== 'PLAYING') {
+            function createStars() {
+                stars = [];
+                for (let layer = 0; layer < 3; layer++) {
+                    const count = [80, 60, 40][layer];
+                    const speed = [0.4, 1.2, 2.5][layer];
+                    const sizeMul = [0.6, 1.0, 1.6][layer];
+                    for (let i = 0; i < count; i++) {
+                        stars.push({
+                            x: Math.random() * window.innerWidth,
+                            y: Math.random() * window.innerHeight,
+                            size: (Math.random() * 1.2 + 0.4) * sizeMul,
+                            speed: speed,
+                            brightness: Math.random() * 0.6 + 0.3,
+                            layer: layer
+                        });
+                    }
+                }
+            }
+            function createNebulae() {
+                nebulae = [];
+                for (let i = 0; i < 5; i++) {
+                    nebulae.push({
+                        x: Math.random() * window.innerWidth,
+                        y: Math.random() * window.innerHeight * 2 - window.innerHeight,
+                        size: Math.random() * 200 + 150,
+                        hue: Math.random() * 360,
+                        speed: 0.15
+                    });
+                }
+            }
+
+            // ========== Input handlers ==========
+            function handleMouseMove(e) {
+                if (controlMode !== 'mouse') return;
+                targetX = e.clientX;
+                targetY = e.clientY;
+                hasTarget = true;
+            }
+            function handleTouchStart(e) {
+                e.preventDefault();
+                if (controlMode === 'touch' && e.touches[0]) {
+                    const t = e.touches[0];
+                    targetX = t.clientX;
+                    targetY = t.clientY - PLAYER_TOUCH_OFFSET;
+                    hasTarget = true;
+                }
+                if (state === 'PLAYING') ensureAudio();
+            }
+            function handleTouchMove(e) {
+                e.preventDefault();
+                if (controlMode === 'touch' && e.touches[0]) {
+                    const t = e.touches[0];
+                    targetX = t.clientX;
+                    targetY = t.clientY - PLAYER_TOUCH_OFFSET;
+                    hasTarget = true;
+                }
+            }
+            function handleTouchEnd(e) {
+                // keep last target
+            }
+
+            function handleOrientation(e) {
+                if (!tiltCalibrated && e.gamma != null && e.beta != null) {
+                    tiltCalibX = e.gamma;
+                    tiltCalibY = e.beta;
+                    tiltCalibrated = true;
+                }
+                const gx = (e.gamma || 0) - tiltCalibX;
+                const gy = (e.beta  || 0) - tiltCalibY;
+                // Enhanced sensitivity: ±15deg = max (was ±18)
+                tiltX = Math.max(-1, Math.min(1, gx / 15)) * tiltStrength;
+                tiltY = Math.max(-1, Math.min(1, gy / 15)) * tiltStrength;
+                // Store gyro tilt for visual feedback
+                player.gyroTilt = tiltX * 0.3;
+            }
+
+            async function enableTilt() {
+                if (typeof DeviceOrientationEvent !== 'undefined' &&
+                    typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    try {
+                        const r = await DeviceOrientationEvent.requestPermission();
+                        if (r !== 'granted') { alert('傾き操作の許可が必要です'); return false; }
+                    } catch (err) { console.error(err); return false; }
+                }
+                window.addEventListener('deviceorientation', handleOrientation);
+                tiltCalibrated = false;
+                tiltStrength = 1.2; // Boost gyro sensitivity
+                return true;
+            }
+
+            // ========== Game flow ==========
+            async function handleStart() {
+                ensureAudio();
+                if (isMobile && controlMode === 'tilt') {
+                    const ok = await enableTilt();
+                    if (!ok) return;
+                }
+                resetGame();
+            }
+
+            function resetGame() {
+                state = 'PLAYING';
+                score = 0; combo = 0; maxCombo = 0;
+                comboTimer = 0; shieldTimer = 0; slowTimer = 0; magnetTimer = 0; bombTimer = 0; multiplierTimer = 0;
+                multiplier = 1.0;
+                invulnGrace = 1500;
+                elapsed = 0;
+                speedMul = 1;
+                timeScale = 1;
+                slowCharges = 1;
+                currentLevel = 1;
+                obstacles = []; items = []; particles = [];
+                player.trail = [];
                 player.x = window.innerWidth / 2;
                 player.y = window.innerHeight * 0.78;
+                player.vx = 0; player.vy = 0;
+                player.rotation = 0;
+                player.gyroTilt = 0;
+                targetX = player.x; targetY = player.y;
+                hasTarget = false;
+
+                overlay.style.display = 'none';
+                overlay.style.opacity = '0';
+                updateSlowBtn();
+                levelDisplay.classList.add('active');
+                multiplierDisplay.classList.remove('active');
             }
-        }
 
-        function loadHiscore() {
-            try { hiscore = parseInt(localStorage.getItem(HISCORE_KEY) || '0', 10) || 0; } catch(e) { hiscore = 0; }
-        }
-        function saveHiscore() {
-            try { localStorage.setItem(HISCORE_KEY, String(Math.floor(hiscore))); } catch(e) {}
-        }
+            function gameOver() {
+                if (state !== 'PLAYING') return;
+                state = 'GAMEOVER';
+                sfx.hit();
+                createExplosion(player.x, player.y, '#fff', 60, 16);
+                createExplosion(player.x, player.y, varColor('--danger'), 30, 12);
 
-        function createStars() {
-            stars = [];
-            // 3 layers parallax
-            for (let layer = 0; layer < 3; layer++) {
-                const count = [80, 60, 40][layer];
-                const speed = [0.4, 1.2, 2.5][layer];
-                const sizeMul = [0.6, 1.0, 1.6][layer];
-                for (let i = 0; i < count; i++) {
-                    stars.push({
-                        x: Math.random() * window.innerWidth,
-                        y: Math.random() * window.innerHeight,
-                        size: (Math.random() * 1.2 + 0.4) * sizeMul,
-                        speed: speed,
-                        brightness: Math.random() * 0.6 + 0.3,
-                        layer: layer
-                    });
+                if (score > hiscore) { hiscore = Math.floor(score); saveHiscore(); }
+
+                setTimeout(() => {
+                    menuTitle.textContent = 'MISSION FAILED';
+                    menuTitle.style.background = 'linear-gradient(to bottom, #fff, #ff4b2b)';
+                    menuTitle.style.webkitBackgroundClip = 'text';
+                    menuDesc.classList.add('compact');
+                    menuDesc.innerHTML = '宇宙の塵となりました。<br>もう一度ミッションへ。';
+                    scoreDisplay.style.display = 'flex';
+                    finalScore.textContent = Math.floor(score).toLocaleString();
+                    finalCombo.textContent = 'x' + maxCombo;
+                    finalBest.textContent  = Math.floor(hiscore).toLocaleString();
+                    startBtn.textContent = 'RETRY';
+
+                    overlay.style.display = 'flex';
+                    requestAnimationFrame(() => overlay.style.opacity = '1');
+                }, 700);
+
+                canvas.style.animation = 'none';
+                void canvas.offsetWidth;
+                canvas.style.animation = 'shake 0.55s cubic-bezier(.36,.07,.19,.97) both';
+                uiLayer.classList.remove('hit-flash');
+                void uiLayer.offsetWidth;
+                uiLayer.classList.add('hit-flash');
+            }
+
+            // ========== Slow-mo ==========
+            function triggerSlow() {
+                if (state !== 'PLAYING') return;
+                if (slowCharges <= 0 || slowTimer > 0) return;
+                slowCharges--;
+                slowTimer = SLOW_DURATION;
+                sfx.slow();
+                createExplosion(player.x, player.y, varColor('--slow'), 20, 8);
+                updateSlowBtn();
+            }
+            function updateSlowBtn() {
+                slowBtn.innerHTML = `SLOW<br>x${slowCharges}`;
+                slowBtn.classList.toggle('disabled', slowCharges <= 0 || slowTimer > 0);
+                slowBtn.style.display = (isMobile && state === 'PLAYING') ? 'flex' : (state === 'PLAYING' ? 'flex' : 'none');
+            }
+
+            // ========== Spawning ==========
+            let spawnAccObs = 0, spawnAccEnergy = 0, spawnAccShield = 0, spawnAccMagnet = 0, spawnAccSlow = 0, spawnAccBomb = 0, spawnAccMult = 0;
+            function spawnEntities(dt) {
+                const t = elapsed / 1000;
+                speedMul = 1 + Math.min(2.0, t / 35);
+                currentLevel = Math.floor(1 + t / 20);
+                levelValue.textContent = currentLevel;
+
+                // IMPROVED: Reduced obstacle spawn rate early game, scales more gradually
+                // Base: 0.025, was 0.045 + speedMul * 0.025
+                spawnAccObs += dt * (0.02 + speedMul * 0.015);
+                while (spawnAccObs > 1) {
+                    spawnAccObs -= 1;
+                    spawnObstacle(t);
                 }
+
+                spawnAccEnergy += dt * 0.0011;
+                while (spawnAccEnergy > 1) { spawnAccEnergy -= 1; spawnItem('energy'); }
+
+                spawnAccShield += dt * 0.000085;
+                while (spawnAccShield > 1) { spawnAccShield -= 1; spawnItem('shield'); }
+
+                spawnAccMagnet += dt * 0.000055;
+                while (spawnAccMagnet > 1) { spawnAccMagnet -= 1; spawnItem('magnet'); }
+
+                spawnAccSlow += dt * 0.000045;
+                while (spawnAccSlow > 1) { spawnAccSlow -= 1; spawnItem('slow'); }
+
+                // NEW: Bomb spawns every ~30s
+                spawnAccBomb += dt * 0.000033;
+                while (spawnAccBomb > 1) { spawnAccBomb -= 1; spawnItem('bomb'); }
+
+                // NEW: Multiplier spawns every ~40s
+                spawnAccMult += dt * 0.000025;
+                while (spawnAccMult > 1) { spawnAccMult -= 1; spawnItem('multiplier'); }
             }
-        }
-        function createNebulae() {
-            nebulae = [];
-            for (let i = 0; i < 5; i++) {
-                nebulae.push({
-                    x: Math.random() * window.innerWidth,
-                    y: Math.random() * window.innerHeight * 2 - window.innerHeight,
-                    size: Math.random() * 200 + 150,
-                    hue: Math.random() * 360,
-                    speed: 0.15
+
+            function spawnObstacle(tSec) {
+                const r = Math.random();
+                let pattern = 'straight';
+                if (tSec > 15 && r < 0.2) pattern = 'sine';
+                else if (tSec > 30 && r < 0.35) pattern = 'homing';
+                else if (tSec > 45 && r < 0.5) pattern = 'cluster';
+
+                if (pattern === 'cluster') {
+                    const cx = Math.random() * (window.innerWidth - 120) + 60;
+                    const baseSpeed = (Math.random() * 80 + 180) * speedMul;
+                    for (let i = -1; i <= 1; i++) {
+                        pushObstacle({
+                            x: cx + i * 55,
+                            y: -60 + Math.abs(i) * -30,
+                            size: 18 + Math.random() * 8,
+                            vx: 0,
+                            vy: baseSpeed,
+                            pattern: 'straight',
+                            rotation: Math.random() * Math.PI * 2,
+                            rotSpeed: (Math.random() - 0.5) * 2.5,
+                            hue: Math.random() * 30 - 15
+                        });
+                    }
+                    return;
+                }
+
+                const size = Math.random() * 28 + 22;
+                const x = Math.random() * window.innerWidth;
+                const speed = (Math.random() * 80 + 200) * speedMul;
+                const o = {
+                    x, y: -size * 2,
+                    size,
+                    vx: 0,
+                    vy: speed,
+                    pattern,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 2.5,
+                    hue: Math.random() * 30 - 15,
+                    phase: Math.random() * Math.PI * 2,
+                    amp: 80 + Math.random() * 120,
+                    originX: x,
+                    grazed: false
+                };
+                if (pattern === 'homing') {
+                    o.vy = speed * 0.7;
+                    o.homing = 0.6;
+                }
+                pushObstacle(o);
+            }
+            function pushObstacle(o) { obstacles.push(o); }
+
+            function spawnItem(type) {
+                const sizes = { energy: 11, shield: 17, magnet: 15, slow: 15, bomb: 13, multiplier: 12 };
+                items.push({
+                    type,
+                    x: Math.random() * (window.innerWidth - 80) + 40,
+                    y: -50,
+                    size: sizes[type],
+                    speed: (type === 'energy' ? 220 : 200) * Math.min(2, speedMul),
+                    pulse: Math.random() * Math.PI * 2,
+                    wob: Math.random() * 0.5
                 });
             }
-        }
 
-        // ========== Input handlers ==========
-        function handleMouseMove(e) {
-            if (controlMode !== 'mouse') return;
-            // PC: ship follows cursor directly
-            targetX = e.clientX;
-            targetY = e.clientY;
-            hasTarget = true;
-        }
-        function handleTouchStart(e) {
-            e.preventDefault();
-            if (controlMode === 'touch' && e.touches[0]) {
-                const t = e.touches[0];
-                targetX = t.clientX;
-                targetY = t.clientY - PLAYER_TOUCH_OFFSET;
-                hasTarget = true;
-            }
-            if (state === 'PLAYING') ensureAudio();
-        }
-        function handleTouchMove(e) {
-            e.preventDefault();
-            if (controlMode === 'touch' && e.touches[0]) {
-                const t = e.touches[0];
-                targetX = t.clientX;
-                targetY = t.clientY - PLAYER_TOUCH_OFFSET;
-                hasTarget = true;
-            }
-        }
-        function handleTouchEnd(e) {
-            // keep last target so the ship doesn't snap
-        }
+            // ========== Update ==========
+            function update(dtMs) {
+                const bgFactor = state === 'PLAYING' ? speedMul * timeScale : 0.25;
+                const dts = dtMs / 1000;
+                stars.forEach(s => {
+                    s.y += s.speed * 60 * dts * bgFactor;
+                    if (s.y > window.innerHeight + 5) {
+                        s.y = -5;
+                        s.x = Math.random() * window.innerWidth;
+                    }
+                });
+                nebulae.forEach(n => {
+                    n.y += n.speed * 60 * dts * bgFactor * 0.4;
+                    if (n.y - n.size > window.innerHeight) {
+                        n.y = -n.size;
+                        n.x = Math.random() * window.innerWidth;
+                        n.hue = Math.random() * 360;
+                    }
+                });
 
-        function handleOrientation(e) {
-            // First reading -> calibrate so player can hold phone naturally
-            if (!tiltCalibrated && e.gamma != null && e.beta != null) {
-                tiltCalibX = e.gamma;
-                tiltCalibY = e.beta;
-                tiltCalibrated = true;
-            }
-            const gx = (e.gamma || 0) - tiltCalibX;   // left/right
-            const gy = (e.beta  || 0) - tiltCalibY;   // forward/back
-            // Normalize: ±18deg = max
-            tiltX = Math.max(-1, Math.min(1, gx / 18));
-            tiltY = Math.max(-1, Math.min(1, gy / 18));
-        }
+                if (state !== 'PLAYING') return;
 
-        async function enableTilt() {
-            if (typeof DeviceOrientationEvent !== 'undefined' &&
-                typeof DeviceOrientationEvent.requestPermission === 'function') {
-                try {
-                    const r = await DeviceOrientationEvent.requestPermission();
-                    if (r !== 'granted') { alert('傾き操作の許可が必要です'); return false; }
-                } catch (err) { console.error(err); return false; }
-            }
-            window.addEventListener('deviceorientation', handleOrientation);
-            tiltCalibrated = false;
-            return true;
-        }
+                elapsed += dtMs;
+                spawnEntities(dtMs);
 
-        // ========== Game flow ==========
-        async function handleStart() {
-            ensureAudio();
-            if (isMobile && controlMode === 'tilt') {
-                const ok = await enableTilt();
-                if (!ok) return;
-            }
-            resetGame();
-        }
+                const dtg = dtMs * timeScale;
+                const dtgs = dtg / 1000;
 
-        function resetGame() {
-            state = 'PLAYING';
-            score = 0; combo = 0; maxCombo = 0;
-            comboTimer = 0; shieldTimer = 0; slowTimer = 0; magnetTimer = 0;
-            invulnGrace = 1500;
-            elapsed = 0;
-            speedMul = 1;
-            timeScale = 1;
-            slowCharges = 1;     // start with one charge
-            obstacles = []; items = []; particles = [];
-            player.trail = [];
-            player.x = window.innerWidth / 2;
-            player.y = window.innerHeight * 0.78;
-            player.vx = 0; player.vy = 0;
-            // Default target = current pos (so player doesn't fly away)
-            targetX = player.x; targetY = player.y;
-            hasTarget = (controlMode !== 'tilt');
-
-            updateSlowBtn();
-            shieldUI.style.opacity = '0';
-            slowUI.style.opacity = '0';
-            comboCont.classList.remove('active');
-
-            overlay.style.opacity = '0';
-            setTimeout(() => overlay.style.display = 'none', 400);
-
-            // Reset menu styling for retry
-            menuTitle.style.background = 'linear-gradient(to bottom, #fff 30%, var(--primary))';
-            menuTitle.style.webkitBackgroundClip = 'text';
-        }
-
-        function gameOver() {
-            if (state !== 'PLAYING') return;
-            state = 'GAMEOVER';
-            sfx.hit();
-            createExplosion(player.x, player.y, '#fff', 60, 16);
-            createExplosion(player.x, player.y, varColor('--danger'), 30, 12);
-
-            // Update high score
-            if (score > hiscore) { hiscore = Math.floor(score); saveHiscore(); }
-
-            setTimeout(() => {
-                menuTitle.textContent = 'MISSION FAILED';
-                menuTitle.style.background = 'linear-gradient(to bottom, #fff, #ff4b2b)';
-                menuTitle.style.webkitBackgroundClip = 'text';
-                menuDesc.classList.add('compact');
-                menuDesc.innerHTML = '宇宙の塵となりました。<br>もう一度ミッションへ。';
-                scoreDisplay.style.display = 'flex';
-                finalScore.textContent = Math.floor(score).toLocaleString();
-                finalCombo.textContent = 'x' + maxCombo;
-                finalBest.textContent  = Math.floor(hiscore).toLocaleString();
-                startBtn.textContent = 'RETRY';
-
-                overlay.style.display = 'flex';
-                requestAnimationFrame(() => overlay.style.opacity = '1');
-            }, 700);
-
-            // Screen shake
-            canvas.style.animation = 'none';
-            void canvas.offsetWidth;
-            canvas.style.animation = 'shake 0.55s cubic-bezier(.36,.07,.19,.97) both';
-            uiLayer.classList.remove('hit-flash');
-            void uiLayer.offsetWidth;
-            uiLayer.classList.add('hit-flash');
-        }
-
-        // ========== Slow-mo ==========
-        function triggerSlow() {
-            if (state !== 'PLAYING') return;
-            if (slowCharges <= 0 || slowTimer > 0) return;
-            slowCharges--;
-            slowTimer = SLOW_DURATION;
-            sfx.slow();
-            createExplosion(player.x, player.y, varColor('--slow'), 20, 8);
-            updateSlowBtn();
-        }
-        function updateSlowBtn() {
-            slowBtn.innerHTML = `SLOW<br>x${slowCharges}`;
-            slowBtn.classList.toggle('disabled', slowCharges <= 0 || slowTimer > 0);
-            // Show button only on touch/tilt control
-            slowBtn.style.display = (isMobile && state === 'PLAYING') ? 'flex' : (state === 'PLAYING' ? 'flex' : 'none');
-        }
-
-        // ========== Spawning ==========
-        let spawnAccObs = 0, spawnAccEnergy = 0, spawnAccShield = 0, spawnAccMagnet = 0, spawnAccSlow = 0;
-        function spawnEntities(dt) {
-            // dt is real (unscaled) ms
-            const t = elapsed / 1000; // seconds
-            speedMul = 1 + Math.min(2.0, t / 35);  // caps around 3x at 70s
-
-            // Obstacles: spawn rate scales with speedMul, with patterns
-            spawnAccObs += dt * (0.045 + speedMul * 0.025);
-            while (spawnAccObs > 1) {
-                spawnAccObs -= 1;
-                spawnObstacle(t);
-            }
-
-            // Energy core every ~0.9s
-            spawnAccEnergy += dt * 0.0011;
-            while (spawnAccEnergy > 1) { spawnAccEnergy -= 1; spawnItem('energy'); }
-
-            // Shield every ~12s
-            spawnAccShield += dt * 0.000085;
-            while (spawnAccShield > 1) { spawnAccShield -= 1; spawnItem('shield'); }
-
-            // Magnet every ~18s
-            spawnAccMagnet += dt * 0.000055;
-            while (spawnAccMagnet > 1) { spawnAccMagnet -= 1; spawnItem('magnet'); }
-
-            // Slow charge every ~22s
-            spawnAccSlow += dt * 0.000045;
-            while (spawnAccSlow > 1) { spawnAccSlow -= 1; spawnItem('slow'); }
-        }
-
-        function spawnObstacle(tSec) {
-            // Pattern selection unlocked over time
-            const r = Math.random();
-            let pattern = 'straight';
-            if (tSec > 15 && r < 0.2) pattern = 'sine';
-            else if (tSec > 30 && r < 0.35) pattern = 'homing';
-            else if (tSec > 45 && r < 0.5) pattern = 'cluster';
-
-            if (pattern === 'cluster') {
-                // small cluster of 3
-                const cx = Math.random() * (window.innerWidth - 120) + 60;
-                const baseSpeed = (Math.random() * 80 + 180) * speedMul;
-                for (let i = -1; i <= 1; i++) {
-                    pushObstacle({
-                        x: cx + i * 55,
-                        y: -60 + Math.abs(i) * -30,
-                        size: 18 + Math.random() * 8,
-                        vx: 0,
-                        vy: baseSpeed,
-                        pattern: 'straight',
-                        rotation: Math.random() * Math.PI * 2,
-                        rotSpeed: (Math.random() - 0.5) * 2.5,
-                        hue: Math.random() * 30 - 15
-                    });
+                if (slowTimer > 0) {
+                    slowTimer -= dtMs;
+                    slowUI.style.opacity = '1';
+                    slowFill.style.transform = `scaleX(${Math.max(0, slowTimer / SLOW_DURATION)})`;
+                    timeScale = Math.max(SLOW_FACTOR, Math.min(1, timeScale + (SLOW_FACTOR - timeScale) * 0.2));
+                    if (slowTimer <= 0) { slowTimer = 0; slowUI.style.opacity = '0'; updateSlowBtn(); }
+                } else {
+                    timeScale = Math.min(1, timeScale + dtMs * 0.003);
+                    if (timeScale >= 0.99) timeScale = 1;
                 }
-                return;
-            }
 
-            const size = Math.random() * 28 + 22;
-            const x = Math.random() * window.innerWidth;
-            const speed = (Math.random() * 80 + 200) * speedMul;
-            const o = {
-                x, y: -size * 2,
-                size,
-                vx: 0,
-                vy: speed,
-                pattern,
-                rotation: Math.random() * Math.PI * 2,
-                rotSpeed: (Math.random() - 0.5) * 2.5,
-                hue: Math.random() * 30 - 15,
-                phase: Math.random() * Math.PI * 2,
-                amp: 80 + Math.random() * 120,
-                originX: x,
-                grazed: false
-            };
-            if (pattern === 'homing') {
-                o.vy = speed * 0.7;   // a bit slower so player can dodge
-                o.homing = 0.6;       // homing strength factor
-            }
-            pushObstacle(o);
-        }
-        function pushObstacle(o) { obstacles.push(o); }
+                score += 0.04 * dtMs * speedMul * multiplier;
+                scoreEl.textContent = Math.floor(score).toLocaleString();
+                if (scoreFlash > 0) { scoreFlash -= dtMs; }
 
-        function spawnItem(type) {
-            const sizes = { energy: 11, shield: 17, magnet: 15, slow: 15 };
-            items.push({
-                type,
-                x: Math.random() * (window.innerWidth - 80) + 40,
-                y: -50,
-                size: sizes[type],
-                speed: (type === 'energy' ? 220 : 200) * Math.min(2, speedMul),
-                pulse: Math.random() * Math.PI * 2,
-                wob: Math.random() * 0.5
-            });
-        }
+                if (invulnGrace > 0) invulnGrace -= dtMs;
 
-        // ========== Update ==========
-        function update(dtMs) {
-            // Background (unaffected by slow-mo, but slows in menu)
-            const bgFactor = state === 'PLAYING' ? speedMul * timeScale : 0.25;
-            const dts = dtMs / 1000;
-            stars.forEach(s => {
-                s.y += s.speed * 60 * dts * bgFactor;
-                if (s.y > window.innerHeight + 5) {
-                    s.y = -5;
-                    s.x = Math.random() * window.innerWidth;
+                // ========== Player movement ==========
+                let tx = player.x, ty = player.y;
+                if (controlMode === 'tilt') {
+                    tx = player.x + tiltX * 240;
+                    ty = player.y + tiltY * 200;
+                } else {
+                    if (hasTarget) { tx = targetX; ty = targetY; }
                 }
-            });
-            nebulae.forEach(n => {
-                n.y += n.speed * 60 * dts * bgFactor * 0.4;
-                if (n.y - n.size > window.innerHeight) {
-                    n.y = -n.size;
-                    n.x = Math.random() * window.innerWidth;
-                    n.hue = Math.random() * 360;
+
+                const k = controlMode === 'tilt' ? 8 : 14;
+                const damp = 0.86;
+                const ax = (tx - player.x) * k;
+                const ay = (ty - player.y) * k;
+                player.vx = (player.vx + ax * dtgs) * Math.pow(damp, dtg / 16.67);
+                player.vy = (player.vy + ay * dtgs) * Math.pow(damp, dtg / 16.67);
+                const maxV = 1400;
+                const vmag = Math.hypot(player.vx, player.vy);
+                if (vmag > maxV) { player.vx = player.vx / vmag * maxV; player.vy = player.vy / vmag * maxV; }
+                player.x += player.vx * dtgs;
+                player.y += player.vy * dtgs;
+
+                player.x = Math.max(PLAYER_RADIUS, Math.min(window.innerWidth - PLAYER_RADIUS, player.x));
+                player.y = Math.max(PLAYER_RADIUS + 30, Math.min(window.innerHeight - PLAYER_RADIUS - 10, player.y));
+
+                const targetRot = Math.max(-0.6, Math.min(0.6, player.vx * 0.0012));
+                player.rotation += (targetRot - player.rotation) * Math.min(1, dtgs * 10);
+
+                if (Math.hypot(player.vx, player.vy) > 30 || player.trail.length === 0) {
+                    player.trail.push({ x: player.x, y: player.y, t: 1 });
                 }
-            });
+                player.trail.forEach(p => p.t -= dtgs * 2.5);
+                while (player.trail.length > 0 && player.trail[0].t <= 0) player.trail.shift();
+                if (player.trail.length > 30) player.trail.shift();
 
-            if (state !== 'PLAYING') return;
-
-            elapsed += dtMs;
-            spawnEntities(dtMs);
-
-            // Time-scaled dt for game objects
-            const dtg = dtMs * timeScale;
-            const dtgs = dtg / 1000;
-
-            // Slow timer countdown (real time)
-            if (slowTimer > 0) {
-                slowTimer -= dtMs;
-                slowUI.style.opacity = '1';
-                slowFill.style.transform = `scaleX(${Math.max(0, slowTimer / SLOW_DURATION)})`;
-                // ramp time scale
-                timeScale = Math.max(SLOW_FACTOR, Math.min(1, timeScale + (SLOW_FACTOR - timeScale) * 0.2));
-                if (slowTimer <= 0) { slowTimer = 0; slowUI.style.opacity = '0'; updateSlowBtn(); }
-            } else {
-                timeScale = Math.min(1, timeScale + dtMs * 0.003);
-                if (timeScale >= 0.99) timeScale = 1;
-            }
-
-            // Score
-            score += 0.04 * dtMs * speedMul;
-            scoreEl.textContent = Math.floor(score).toLocaleString();
-            if (scoreFlash > 0) { scoreFlash -= dtMs; }
-
-            if (invulnGrace > 0) invulnGrace -= dtMs;
-
-            // ========== Player movement ==========
-            // Determine target position from input
-            let tx = player.x, ty = player.y;
-            if (controlMode === 'tilt') {
-                // tilt -> velocity additive
-                tx = player.x + tiltX * 240;
-                ty = player.y + tiltY * 200;
-            } else {
-                if (hasTarget) { tx = targetX; ty = targetY; }
-            }
-
-            // Spring-damper toward target (frame independent)
-            const k = controlMode === 'tilt' ? 8 : 14;   // stiffness
-            const damp = 0.86;
-            const ax = (tx - player.x) * k;
-            const ay = (ty - player.y) * k;
-            player.vx = (player.vx + ax * dtgs) * Math.pow(damp, dtg / 16.67);
-            player.vy = (player.vy + ay * dtgs) * Math.pow(damp, dtg / 16.67);
-            // Velocity clamp
-            const maxV = 1400;
-            const vmag = Math.hypot(player.vx, player.vy);
-            if (vmag > maxV) { player.vx = player.vx / vmag * maxV; player.vy = player.vy / vmag * maxV; }
-            player.x += player.vx * dtgs;
-            player.y += player.vy * dtgs;
-
-            // Bounds
-            player.x = Math.max(PLAYER_RADIUS, Math.min(window.innerWidth - PLAYER_RADIUS, player.x));
-            player.y = Math.max(PLAYER_RADIUS + 30, Math.min(window.innerHeight - PLAYER_RADIUS - 10, player.y));
-
-            // Rotation tied to vx
-            const targetRot = Math.max(-0.6, Math.min(0.6, player.vx * 0.0012));
-            player.rotation += (targetRot - player.rotation) * Math.min(1, dtgs * 10);
-
-            // Trail
-            if (Math.hypot(player.vx, player.vy) > 30 || player.trail.length === 0) {
-                player.trail.push({ x: player.x, y: player.y, t: 1 });
-            }
-            player.trail.forEach(p => p.t -= dtgs * 2.5);
-            while (player.trail.length > 0 && player.trail[0].t <= 0) player.trail.shift();
-            if (player.trail.length > 30) player.trail.shift();
-
-            // Shield timer
-            if (shieldTimer > 0) {
-                shieldTimer -= dtMs;
-                shieldUI.style.opacity = '1';
-                shieldFill.style.transform = `scaleX(${Math.max(0, shieldTimer / SHIELD_DURATION)})`;
-                if (shieldTimer <= 0) {
-                    shieldTimer = 0;
-                    shieldUI.style.opacity = '0';
-                    createExplosion(player.x, player.y, varColor('--shield'), 18, 7);
+                if (shieldTimer > 0) {
+                    shieldTimer -= dtMs;
+                    shieldUI.style.opacity = '1';
+                    shieldFill.style.transform = `scaleX(${Math.max(0, shieldTimer / SHIELD_DURATION)})`;
+                    if (shieldTimer <= 0) {
+                        shieldTimer = 0;
+                        shieldUI.style.opacity = '0';
+                        createExplosion(player.x, player.y, varColor('--shield'), 18, 7);
+                    }
                 }
-            }
 
-            // Magnet timer
-            if (magnetTimer > 0) magnetTimer -= dtMs;
+                if (magnetTimer > 0) magnetTimer -= dtMs;
+                if (bombTimer > 0) bombTimer -= dtMs;
+                if (multiplierTimer > 0) {
+                    multiplierTimer -= dtMs;
+                    if (multiplierTimer <= 0) {
+                        multiplier = 1.0;
+                        multiplierDisplay.classList.remove('active');
+                    }
+                } else {
+                    multiplier = 1.0;
+                }
 
-            // Combo timer
-            if (comboTimer > 0) {
-                comboTimer -= dtMs;
-                if (comboTimer <= 0) { combo = 0; comboCont.classList.remove('active'); }
-            }
+                if (comboTimer > 0) {
+                    comboTimer -= dtMs;
+                    if (comboTimer <= 0) { combo = 0; comboCont.classList.remove('active'); }
+                }
 
-            // ========== Obstacles ==========
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                const o = obstacles[i];
-                if (o.pattern === 'sine') {
-                    o.phase += dtgs * 2.5;
-                    o.x = o.originX + Math.sin(o.phase) * o.amp;
-                } else if (o.pattern === 'homing') {
+                // ========== Obstacles ==========
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    const o = obstacles[i];
+                    if (o.pattern === 'sine') {
+                        o.phase += dtgs * 2.5;
+                        o.x = o.originX + Math.sin(o.phase) * o.amp;
+                    } else if (o.pattern === 'homing') {
+                        const dx = player.x - o.x;
+                        const ady = Math.max(60, player.y - o.y);
+                        if (player.y > o.y) {
+                            o.vx += (dx / Math.hypot(dx, ady)) * 350 * o.homing * dtgs;
+                            o.vx *= Math.pow(0.92, dtg / 16.67);
+                        }
+                        o.x += o.vx * dtgs;
+                    }
+                    o.y += o.vy * dtgs;
+                    o.rotation += o.rotSpeed * dtgs;
+
                     const dx = player.x - o.x;
-                    const ady = Math.max(60, player.y - o.y);
-                    if (player.y > o.y) {
-                        o.vx += (dx / Math.hypot(dx, ady)) * 350 * o.homing * dtgs;
-                        // damp
-                        o.vx *= Math.pow(0.92, dtg / 16.67);
+                    const dy = player.y - o.y;
+                    const dist = Math.hypot(dx, dy);
+                    const hitDist = PLAYER_RADIUS + o.size * 0.78;
+
+                    if (!o.grazed && dist < hitDist + 20 && dist > hitDist) {
+                        o.grazed = true;
+                        score += 25 * (1 + combo * 0.05) * multiplier;
+                        scoreFlash = 200;
+                        sfx.graze();
+                        spawnFloat(o.x, o.y, '+25', '#fff');
                     }
-                    o.x += o.vx * dtgs;
+
+                    if (dist < hitDist) {
+                        if (shieldTimer > 0) {
+                            createExplosion(o.x, o.y, varColor('--shield'), 18, 8);
+                            sfx.shield();
+                            score += 200 * multiplier;
+                            addCombo();
+                            spawnFloat(o.x, o.y, '+200', varColor('--shield'));
+                            obstacles.splice(i, 1);
+                            continue;
+                        } else if (invulnGrace > 0) {
+                            obstacles.splice(i, 1);
+                            continue;
+                        } else {
+                            gameOver();
+                            return;
+                        }
+                    }
+
+                    if (o.y - o.size > window.innerHeight + 50) obstacles.splice(i, 1);
+                    else if (o.x < -100 || o.x > window.innerWidth + 100) obstacles.splice(i, 1);
                 }
-                o.y += o.vy * dtgs;
-                o.rotation += o.rotSpeed * dtgs;
 
-                const dx = player.x - o.x;
-                const dy = player.y - o.y;
-                const dist = Math.hypot(dx, dy);
-                const hitDist = PLAYER_RADIUS + o.size * 0.78;
+                // ========== Items ==========
+                const magnetActive = magnetTimer > 0;
+                const magnetRange = 220;
+                const bombActive = bombTimer > 0;
+                const bombRange = 300;
 
-                // Graze detection (close miss)
-                if (!o.grazed && dist < hitDist + 20 && dist > hitDist) {
-                    o.grazed = true;
-                    score += 25 * (1 + combo * 0.05);
-                    scoreFlash = 200;
-                    sfx.graze();
-                    spawnFloat(o.x, o.y, '+25', '#fff');
-                }
+                for (let i = items.length - 1; i >= 0; i--) {
+                    const it = items[i];
+                    it.y += it.speed * dtgs;
+                    it.pulse += dtgs * 6;
 
-                if (dist < hitDist) {
-                    if (shieldTimer > 0) {
-                        createExplosion(o.x, o.y, varColor('--shield'), 18, 8);
-                        sfx.shield();
-                        score += 200;
-                        addCombo();
-                        spawnFloat(o.x, o.y, '+200', varColor('--shield'));
-                        obstacles.splice(i, 1);
+                    const dx = player.x - it.x;
+                    const dy = player.y - it.y;
+                    const dist = Math.hypot(dx, dy);
+
+                    // Magnet pull
+                    if (magnetActive && dist < magnetRange) {
+                        const pull = (1 - dist / magnetRange) * 800;
+                        it.x += (dx / Math.max(1, dist)) * pull * dtgs;
+                        it.y += (dy / Math.max(1, dist)) * pull * dtgs;
+                    }
+
+                    // Bomb pull (stronger)
+                    if (bombActive && dist < bombRange) {
+                        const pull = (1 - dist / bombRange) * 1200;
+                        it.x += (dx / Math.max(1, dist)) * pull * dtgs;
+                        it.y += (dy / Math.max(1, dist)) * pull * dtgs;
+                    }
+
+                    if (dist < PLAYER_RADIUS + it.size + 6) {
+                        if (it.type === 'energy') {
+                            addCombo();
+                            const gain = Math.floor(120 * (1 + combo * 0.15) * multiplier);
+                            score += gain;
+                            sfx.pickup();
+                            createExplosion(it.x, it.y, varColor('--secondary'), 14, 6);
+                            spawnFloat(it.x, it.y, '+' + gain, varColor('--secondary'));
+                        } else if (it.type === 'shield') {
+                            shieldTimer = SHIELD_DURATION;
+                            sfx.shield();
+                            createExplosion(it.x, it.y, varColor('--shield'), 28, 9);
+                            spawnFloat(it.x, it.y, 'SHIELD', varColor('--shield'));
+                        } else if (it.type === 'magnet') {
+                            magnetTimer = 7000;
+                            sfx.magnet();
+                            createExplosion(it.x, it.y, varColor('--magnet'), 20, 8);
+                            spawnFloat(it.x, it.y, 'MAGNET', varColor('--magnet'));
+                        } else if (it.type === 'slow') {
+                            slowCharges++;
+                            sfx.slow();
+                            createExplosion(it.x, it.y, varColor('--slow'), 18, 7);
+                            spawnFloat(it.x, it.y, 'SLOW+1', varColor('--slow'));
+                            updateSlowBtn();
+                        } else if (it.type === 'bomb') {
+                            bombTimer = 5000;
+                            sfx.bomb();
+                            createExplosion(it.x, it.y, varColor('--bomb'), 22, 8);
+                            spawnFloat(it.x, it.y, 'BOMB', varColor('--bomb'));
+                            // Clear nearby obstacles
+                            for (let j = obstacles.length - 1; j >= 0; j--) {
+                                const o = obstacles[j];
+                                const d = Math.hypot(player.x - o.x, player.y - o.y);
+                                if (d < 250) {
+                                    createExplosion(o.x, o.y, varColor('--bomb'), 16, 6);
+                                    obstacles.splice(j, 1);
+                                    score += 150 * multiplier;
+                                    addCombo();
+                                }
+                            }
+                        } else if (it.type === 'multiplier') {
+                            multiplier = 2.0;
+                            multiplierTimer = 8000;
+                            sfx.multiplier();
+                            createExplosion(it.x, it.y, varColor('--multiplier'), 20, 8);
+                            spawnFloat(it.x, it.y, 'x2 MULT', varColor('--multiplier'));
+                            multiplierDisplay.classList.add('active');
+                            multiplierValue.textContent = '2.0x';
+                        }
+                        items.splice(i, 1);
                         continue;
-                    } else if (invulnGrace > 0) {
-                        // push obstacle aside instead of dying
-                        obstacles.splice(i, 1);
-                        continue;
-                    } else {
-                        gameOver();
-                        return;
                     }
+
+                    if (it.y > window.innerHeight + 50) items.splice(i, 1);
                 }
 
-                if (o.y - o.size > window.innerHeight + 50) obstacles.splice(i, 1);
-                else if (o.x < -100 || o.x > window.innerWidth + 100) obstacles.splice(i, 1);
-            }
-
-            // ========== Items ==========
-            const magnetActive = magnetTimer > 0;
-            const magnetRange = 220;
-            for (let i = items.length - 1; i >= 0; i--) {
-                const it = items[i];
-                it.y += it.speed * dtgs;
-                it.pulse += dtgs * 6;
-
-                // Magnet pull
-                const dx = player.x - it.x;
-                const dy = player.y - it.y;
-                const dist = Math.hypot(dx, dy);
-                if (magnetActive && dist < magnetRange) {
-                    const pull = (1 - dist / magnetRange) * 800;
-                    it.x += (dx / Math.max(1, dist)) * pull * dtgs;
-                    it.y += (dy / Math.max(1, dist)) * pull * dtgs;
+                // ========== Particles ==========
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.x += p.vx * dtgs;
+                    p.y += p.vy * dtgs;
+                    p.vy += 300 * dtgs;
+                    p.life -= dtgs;
+                    if (p.life <= 0) particles.splice(i, 1);
                 }
-
-                if (dist < PLAYER_RADIUS + it.size + 6) {
-                    if (it.type === 'energy') {
-                        addCombo();
-                        const gain = Math.floor(120 * (1 + combo * 0.15));
-                        score += gain;
-                        sfx.pickup();
-                        createExplosion(it.x, it.y, varColor('--secondary'), 14, 6);
-                        spawnFloat(it.x, it.y, '+' + gain, varColor('--secondary'));
-                    } else if (it.type === 'shield') {
-                        shieldTimer = SHIELD_DURATION;
-                        sfx.shield();
-                        createExplosion(it.x, it.y, varColor('--shield'), 28, 9);
-                        spawnFloat(it.x, it.y, 'SHIELD', varColor('--shield'));
-                    } else if (it.type === 'magnet') {
-                        magnetTimer = 7000;
-                        sfx.magnet();
-                        createExplosion(it.x, it.y, varColor('--magnet'), 20, 8);
-                        spawnFloat(it.x, it.y, 'MAGNET', varColor('--magnet'));
-                    } else if (it.type === 'slow') {
-                        slowCharges = Math.min(3, slowCharges + 1);
-                        updateSlowBtn();
-                        sfx.slow();
-                        createExplosion(it.x, it.y, varColor('--slow'), 20, 8);
-                        spawnFloat(it.x, it.y, '+ SLOW', varColor('--slow'));
-                    }
-                    items.splice(i, 1);
-                    continue;
-                }
-
-                if (it.y > window.innerHeight + 50) items.splice(i, 1);
             }
 
-            // ========== Particles ==========
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.x += p.vx * dtgs;
-                p.y += p.vy * dtgs;
-                p.vx *= Math.pow(0.94, dtg / 16.67);
-                p.vy *= Math.pow(0.94, dtg / 16.67);
-                p.life -= dtMs * p.decay;
-                p.size *= Math.pow(0.97, dtg / 16.67);
-                if (p.life <= 0 || p.size < 0.3) particles.splice(i, 1);
-            }
-        }
+            // ========== Draw ==========
+            function draw() {
+                ctx.fillStyle = 'rgb(0, 5, 10)';
+                ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
-        function addCombo() {
-            combo++;
-            if (combo > maxCombo) maxCombo = combo;
-            comboTimer = COMBO_TIMEOUT;
-            comboEl.textContent = `x${combo}`;
-            comboCont.classList.add('active');
-            comboEl.style.transform = 'scale(1.35)';
-            setTimeout(() => comboEl.style.transform = 'scale(1)', 120);
-        }
-
-        function spawnFloat(x, y, text, color) {
-            const el = document.createElement('div');
-            el.className = 'float-pop';
-            el.textContent = text;
-            el.style.left = x + 'px';
-            el.style.top = y + 'px';
-            el.style.color = color;
-            uiLayer.appendChild(el);
-            setTimeout(() => el.remove(), 900);
-        }
-
-        function createExplosion(x, y, color, count, speedMax) {
-            const sm = speedMax || 8;
-            for (let i = 0; i < count; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = (Math.random() * sm + 2) * 60;
-                particles.push({
-                    x, y,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    life: 1,
-                    decay: Math.random() * 0.0025 + 0.0012,
-                    size: Math.random() * 4 + 2,
-                    color
+                // Stars
+                ctx.fillStyle = '#fff';
+                stars.forEach(s => {
+                    ctx.globalAlpha = s.brightness;
+                    ctx.fillRect(s.x, s.y, s.size, s.size);
                 });
-            }
-        }
-
-        // ========== Render ==========
-        function draw() {
-            const W = window.innerWidth, H = window.innerHeight;
-            ctx.fillStyle = '#00050a';
-            ctx.fillRect(0, 0, W, H);
-
-            // Nebula glow (low alpha)
-            ctx.globalCompositeOperation = 'lighter';
-            nebulae.forEach(n => {
-                const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.size);
-                grad.addColorStop(0, `hsla(${n.hue}, 80%, 50%, 0.18)`);
-                grad.addColorStop(1, `hsla(${n.hue}, 80%, 50%, 0)`);
-                ctx.fillStyle = grad;
-                ctx.beginPath();
-                ctx.arc(n.x, n.y, n.size, 0, Math.PI * 2);
-                ctx.fill();
-            });
-            ctx.globalCompositeOperation = 'source-over';
-
-            // Stars
-            stars.forEach(s => {
-                ctx.globalAlpha = s.brightness;
-                ctx.fillStyle = s.layer === 2 ? '#bfeaff' : '#fff';
-                ctx.fillRect(s.x - s.size/2, s.y - s.size/2, s.size, s.size);
-            });
-            ctx.globalAlpha = 1;
-
-            // Magnet aura
-            if (magnetTimer > 0 && state === 'PLAYING') {
-                const tFrac = Math.min(1, magnetTimer / 7000);
-                ctx.save();
-                ctx.globalAlpha = 0.15 * tFrac;
-                const grad = ctx.createRadialGradient(player.x, player.y, 30, player.x, player.y, 220);
-                grad.addColorStop(0, varColor('--magnet'));
-                grad.addColorStop(1, 'transparent');
-                ctx.fillStyle = grad;
-                ctx.beginPath(); ctx.arc(player.x, player.y, 220, 0, Math.PI * 2); ctx.fill();
-                ctx.restore();
-            }
-
-            // Player Trail
-            if (player.trail.length > 1 && state !== 'GAMEOVER') {
-                ctx.save();
-                const useShield = shieldTimer > 0;
-                for (let i = 1; i < player.trail.length; i++) {
-                    const a = player.trail[i-1], b = player.trail[i];
-                    const t = b.t;
-                    ctx.strokeStyle = useShield
-                        ? `rgba(0, 242, 255, ${0.5 * t})`
-                        : `rgba(0, 210, 255, ${0.5 * t})`;
-                    ctx.lineWidth = PLAYER_RADIUS * 1.4 * t;
-                    ctx.lineCap = 'round';
-                    ctx.beginPath();
-                    ctx.moveTo(a.x, a.y);
-                    ctx.lineTo(b.x, b.y);
-                    ctx.stroke();
-                }
-                ctx.restore();
-            }
-
-            // Items
-            items.forEach(it => {
-                ctx.save();
-                ctx.translate(it.x, it.y);
-                const pulse = Math.sin(it.pulse) * 0.25 + 1;
-
-                let color = '#fff', glow = '#fff';
-                if (it.type === 'energy') { color = varColor('--secondary'); glow = color; }
-                else if (it.type === 'shield') { color = varColor('--shield'); glow = color; }
-                else if (it.type === 'magnet') { color = varColor('--magnet'); glow = color; }
-                else if (it.type === 'slow')   { color = varColor('--slow');   glow = color; }
-
-                ctx.shadowBlur = 24;
-                ctx.shadowColor = glow;
-                ctx.fillStyle = color;
-                ctx.beginPath();
-                ctx.arc(0, 0, it.size, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Inner highlight
-                ctx.shadowBlur = 0;
-                ctx.fillStyle = 'rgba(255,255,255,0.7)';
-                ctx.beginPath();
-                ctx.arc(-it.size*0.3, -it.size*0.3, it.size*0.3, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Outer ring
-                ctx.strokeStyle = color;
-                ctx.globalAlpha = 0.5;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(0, 0, it.size * (1.5 + pulse * 0.3), 0, Math.PI * 2);
-                ctx.stroke();
                 ctx.globalAlpha = 1;
 
-                // Type icon overlay
-                if (it.type !== 'energy') {
-                    ctx.fillStyle = '#fff';
-                    ctx.font = 'bold 12px Inter, sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    const labels = { shield: 'S', magnet: 'M', slow: 'T' };
-                    ctx.fillText(labels[it.type] || '', 0, 1);
-                }
-                ctx.restore();
-            });
+                // Nebulae
+                nebulae.forEach(n => {
+                    ctx.fillStyle = `hsla(${n.hue}, 100%, 50%, 0.08)`;
+                    ctx.beginPath();
+                    ctx.arc(n.x, n.y, n.size, 0, Math.PI * 2);
+                    ctx.fill();
+                });
 
-            // Obstacles
-            obstacles.forEach(o => {
-                ctx.save();
-                ctx.translate(o.x, o.y);
-                ctx.rotate(o.rotation);
+                // Obstacles
+                obstacles.forEach(o => {
+                    ctx.save();
+                    ctx.translate(o.x, o.y);
+                    ctx.rotate(o.rotation);
+                    ctx.fillStyle = `hsl(${20 + o.hue}, 100%, 55%)`;
+                    ctx.fillRect(-o.size / 2, -o.size / 2, o.size, o.size);
+                    ctx.strokeStyle = `hsl(${20 + o.hue}, 100%, 75%)`;
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeRect(-o.size / 2, -o.size / 2, o.size, o.size);
+                    ctx.restore();
+                });
 
-                // Homing aura
-                if (o.pattern === 'homing') {
-                    ctx.shadowBlur = 18;
-                    ctx.shadowColor = '#ff4b2b';
-                }
+                // Items
+                items.forEach(it => {
+                    const scale = 1 + Math.sin(it.pulse) * 0.15;
+                    const colors = {
+                        energy: '#f9d423',
+                        shield: '#00f2ff',
+                        magnet: '#ff69ff',
+                        slow: '#b066ff',
+                        bomb: '#ff9500',
+                        multiplier: '#00ff88'
+                    };
+                    ctx.save();
+                    ctx.translate(it.x, it.y);
+                    ctx.scale(scale, scale);
+                    ctx.fillStyle = colors[it.type];
+                    ctx.beginPath();
+                    ctx.arc(0, 0, it.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.restore();
+                });
 
-                // Body
-                ctx.fillStyle = o.pattern === 'homing' ? '#2a0d0d' : '#1a1a22';
-                ctx.strokeStyle = o.pattern === 'homing' ? '#ff4b2b' : '#3a3a4a';
-                ctx.lineWidth = 2;
+                // Player trail
+                player.trail.forEach((p, i) => {
+                    const alpha = (p.t / 1) * 0.4;
+                    ctx.fillStyle = `rgba(0, 210, 255, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, PLAYER_RADIUS * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                });
 
-                ctx.beginPath();
-                const sides = 7;
-                for (let i = 0; i < sides; i++) {
-                    const angle = (i / sides) * Math.PI * 2;
-                    const r = o.size * (0.8 + Math.sin(i * 1.7 + o.hue) * 0.2);
-                    const x = Math.cos(angle) * r, y = Math.sin(angle) * r;
-                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-                }
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-
-                // Cracks
-                ctx.shadowBlur = 0;
-                ctx.strokeStyle = o.pattern === 'homing'
-                    ? `hsla(0, 80%, 60%, 0.6)`
-                    : `hsla(${200 + o.hue}, 70%, 55%, 0.4)`;
-                ctx.lineWidth = 1.2;
-                ctx.beginPath();
-                ctx.moveTo(-o.size * 0.55, 0);
-                ctx.lineTo(o.size * 0.55, 0);
-                ctx.moveTo(0, -o.size * 0.4);
-                ctx.lineTo(0, o.size * 0.4);
-                ctx.stroke();
-
-                ctx.restore();
-            });
-
-            // Particles
-            ctx.save();
-            particles.forEach(p => {
-                ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                ctx.fill();
-            });
-            ctx.restore();
-
-            // Player
-            if (state !== 'GAMEOVER') {
+                // Player
                 ctx.save();
                 ctx.translate(player.x, player.y);
-                ctx.rotate(player.rotation);
-
-                // Shield aura
-                if (shieldTimer > 0) {
-                    const pulseAura = Math.sin(Date.now() * 0.012) * 0.1 + 1;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, PLAYER_RADIUS * 1.9 * pulseAura, 0, Math.PI * 2);
-                    const shieldGlow = ctx.createRadialGradient(0, 0, PLAYER_RADIUS, 0, 0, PLAYER_RADIUS * 2.2);
-                    shieldGlow.addColorStop(0, 'rgba(0, 242, 255, 0)');
-                    shieldGlow.addColorStop(0.7, 'rgba(0, 242, 255, 0.35)');
-                    shieldGlow.addColorStop(1, 'rgba(0, 242, 255, 0)');
-                    ctx.fillStyle = shieldGlow;
-                    ctx.fill();
-
-                    ctx.strokeStyle = 'rgba(0, 242, 255, 0.85)';
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([6, 6]);
-                    ctx.lineDashOffset = -Date.now() * 0.05;
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                }
-
-                // Invuln grace blink
-                const visible = invulnGrace <= 0 || (Math.floor(Date.now() / 80) % 2 === 0);
-                if (visible) {
-                    // Engine flame
-                    const eng = Math.sin(Date.now() * 0.02) * 4 + 10;
-                    ctx.shadowBlur = 18;
-                    ctx.shadowColor = shieldTimer > 0 ? varColor('--shield') : varColor('--primary');
-                    ctx.fillStyle = shieldTimer > 0 ? varColor('--shield') : varColor('--primary');
-                    ctx.beginPath();
-                    ctx.moveTo(-PLAYER_RADIUS * 0.45, PLAYER_RADIUS * 0.9);
-                    ctx.lineTo(PLAYER_RADIUS * 0.45, PLAYER_RADIUS * 0.9);
-                    ctx.lineTo(0, PLAYER_RADIUS + eng);
-                    ctx.closePath();
-                    ctx.fill();
-
-                    // Hull
-                    ctx.shadowBlur = 14;
-                    ctx.fillStyle = '#fff';
-                    ctx.beginPath();
-                    ctx.moveTo(0, -PLAYER_RADIUS * 1.4);
-                    ctx.lineTo(PLAYER_RADIUS, PLAYER_RADIUS * 0.9);
-                    ctx.lineTo(0, PLAYER_RADIUS * 0.4);
-                    ctx.lineTo(-PLAYER_RADIUS, PLAYER_RADIUS * 0.9);
-                    ctx.closePath();
-                    ctx.fill();
-
-                    // Cockpit
-                    ctx.shadowBlur = 0;
-                    ctx.fillStyle = shieldTimer > 0 ? '#003d44' : '#001f33';
-                    ctx.beginPath();
-                    ctx.arc(0, -PLAYER_RADIUS * 0.15, PLAYER_RADIUS * 0.32, 0, Math.PI * 2);
-                    ctx.fill();
-                    // Cockpit glint
-                    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-                    ctx.beginPath();
-                    ctx.arc(-PLAYER_RADIUS * 0.1, -PLAYER_RADIUS * 0.25, PLAYER_RADIUS * 0.1, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-
+                ctx.rotate(player.rotation + player.gyroTilt);
+                ctx.fillStyle = '#00d2ff';
+                ctx.beginPath();
+                ctx.moveTo(0, -PLAYER_RADIUS);
+                ctx.lineTo(PLAYER_RADIUS, PLAYER_RADIUS);
+                ctx.lineTo(0, PLAYER_RADIUS * 0.5);
+                ctx.lineTo(-PLAYER_RADIUS, PLAYER_RADIUS);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
                 ctx.restore();
+
+                // Particles
+                particles.forEach(p => {
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.life;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.globalAlpha = 1;
             }
 
-            // Slow-mo vignette
-            if (slowTimer > 0) {
-                const a = Math.min(0.4, slowTimer / SLOW_DURATION * 0.4);
-                const grad = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.7);
-                grad.addColorStop(0, 'rgba(176, 102, 255, 0)');
-                grad.addColorStop(1, `rgba(176, 102, 255, ${a})`);
-                ctx.fillStyle = grad;
-                ctx.fillRect(0, 0, W, H);
+            // ========== Helpers ==========
+            function varColor(cssVar) {
+                const style = getComputedStyle(document.documentElement);
+                return style.getPropertyValue(cssVar).trim();
             }
-        }
 
-        // ========== Helpers ==========
-        function varColor(name) {
-            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-        }
+            function createExplosion(x, y, color, count, size) {
+                for (let i = 0; i < count; i++) {
+                    const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+                    const speed = 200 + Math.random() * 300;
+                    particles.push({
+                        x, y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        size: size * (0.5 + Math.random() * 0.5),
+                        color: color,
+                        life: 0.6 + Math.random() * 0.4
+                    });
+                }
+            }
 
-        // ========== Loop ==========
-        function gameLoop(t) {
-            const dt = lastTime ? Math.min(50, t - lastTime) : 16;
-            lastTime = t;
-            update(dt);
-            draw();
-            requestAnimationFrame(gameLoop);
-        }
+            function addCombo() {
+                combo++;
+                maxCombo = Math.max(maxCombo, combo);
+                comboTimer = COMBO_TIMEOUT;
+                comboEl.textContent = combo;
+                comboCont.classList.add('active');
+            }
 
-        // Boot
-        init();
-    })();
+            function spawnFloat(x, y, text, color) {
+                const el = document.createElement('div');
+                el.className = 'float-pop';
+                el.textContent = text;
+                el.style.left = x + 'px';
+                el.style.top = y + 'px';
+                el.style.color = color;
+                uiLayer.appendChild(el);
+                setTimeout(() => el.remove(), 900);
+            }
+
+            // ========== Game loop ==========
+            function gameLoop(now) {
+                if (lastTime === 0) lastTime = now;
+                const dt = Math.min(now - lastTime, 50);
+                lastTime = now;
+
+                update(dt);
+                draw();
+
+                requestAnimationFrame(gameLoop);
+            }
+
+            init();
+        })();
     </script>
 </body>
 </html>
