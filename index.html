@@ -444,10 +444,11 @@
         const TILT_DEADZONE = 0.08;
         const TILT_SMOOTH = 0.22;
 
+        const SUPPORTED_LOCALES = ['ja', 'en'];
         const localeParam = new URLSearchParams(window.location.search).get('locale');
         const browserLocale = (navigator.language || 'en').toLowerCase();
         const fallbackLocale = browserLocale.startsWith('ja') ? 'ja' : 'en';
-        const locale = (localeParam === 'ja' || localeParam === 'en') ? localeParam : fallbackLocale;
+        const locale = SUPPORTED_LOCALES.includes(localeParam) ? localeParam : fallbackLocale;
         const I18N = {
             ja: {
                 title: 'GALAXY DRIFT: OVERDRIVE',
@@ -872,7 +873,7 @@
         let spawnAccObs = 0, spawnAccEnergy = 0, spawnAccShield = 0, spawnAccMagnet = 0, spawnAccSlow = 0;
         function randomSpawnX(avoidX, avoidRadius) {
             let x = Math.random() * (window.innerWidth - 80) + 40;
-            if ((avoidX === null || avoidX === undefined) || !Number.isFinite(avoidRadius)) return x;
+            if (avoidX === null || avoidX === undefined || !Number.isFinite(avoidRadius)) return x;
             for (let i = 0; i < 8 && Math.abs(x - avoidX) < avoidRadius; i++) {
                 x = Math.random() * (window.innerWidth - 80) + 40;
             }
@@ -1050,7 +1051,7 @@
             const kx = (keyInput.right ? 1 : 0) - (keyInput.left ? 1 : 0);
             const ky = (keyInput.down ? 1 : 0) - (keyInput.up ? 1 : 0);
             if (kx !== 0 || ky !== 0) {
-                const d = Math.hypot(kx, ky) || 1;
+                const d = Math.hypot(kx, ky);
                 tx = player.x + (kx / d) * 280;
                 ty = player.y + (ky / d) * 280;
             } else if (controlMode === 'tilt') {
