@@ -707,11 +707,11 @@
                 }
                 const gx = (e.gamma || 0) - tiltCalibX;
                 const gy = (e.beta  || 0) - tiltCalibY;
-                // Enhanced sensitivity: ±15deg = max (was ±18)
-                tiltX = Math.max(-1, Math.min(1, gx / 15)) * tiltStrength;
-                tiltY = Math.max(-1, Math.min(1, gy / 15)) * tiltStrength;
+                // Gyro sensitivity: ±20deg = max (more forgiving)
+                tiltX = Math.max(-1, Math.min(1, gx / 20)) * tiltStrength;
+                tiltY = Math.max(-1, Math.min(1, gy / 20)) * tiltStrength;
                 // Store gyro tilt for visual feedback
-                player.gyroTilt = tiltX * 0.3;
+                player.gyroTilt = tiltX * 0.25;
             }
 
             async function enableTilt() {
@@ -724,7 +724,7 @@
                 }
                 window.addEventListener('deviceorientation', handleOrientation);
                 tiltCalibrated = false;
-                tiltStrength = 1.2; // Boost gyro sensitivity
+                tiltStrength = 0.95; // Moderate gyro sensitivity for smooth control
                 return true;
             }
 
@@ -819,7 +819,8 @@
             let spawnAccObs = 0, spawnAccEnergy = 0, spawnAccShield = 0, spawnAccMagnet = 0, spawnAccSlow = 0, spawnAccBomb = 0, spawnAccMult = 0;
             function spawnEntities(dt) {
                 const t = elapsed / 1000;
-                speedMul = 1 + Math.min(2.0, t / 35);
+                // More gradual speed increase for better gyro control
+                speedMul = 1 + Math.min(1.5, t / 50);
                 currentLevel = Math.floor(1 + t / 20);
                 levelValue.textContent = currentLevel;
 
@@ -964,19 +965,21 @@
                 // ========== Player movement ==========
                 let tx = player.x, ty = player.y;
                 if (controlMode === 'tilt') {
-                    tx = player.x + tiltX * 240;
-                    ty = player.y + tiltY * 200;
+                    // Reduced movement range for gyro (more controlled)
+                    tx = player.x + tiltX * 180;
+                    ty = player.y + tiltY * 150;
                 } else {
                     if (hasTarget) { tx = targetX; ty = targetY; }
                 }
 
-                const k = controlMode === 'tilt' ? 8 : 14;
-                const damp = 0.86;
+                // Reduced stiffness for gyro, stronger damping for smooth movement
+                const k = controlMode === 'tilt' ? 5 : 14;
+                const damp = controlMode === 'tilt' ? 0.82 : 0.86;  // More damping for gyro
                 const ax = (tx - player.x) * k;
                 const ay = (ty - player.y) * k;
                 player.vx = (player.vx + ax * dtgs) * Math.pow(damp, dtg / 16.67);
                 player.vy = (player.vy + ay * dtgs) * Math.pow(damp, dtg / 16.67);
-                const maxV = 1400;
+                const maxV = controlMode === 'tilt' ? 900 : 1400;  // Lower max speed for gyro
                 const vmag = Math.hypot(player.vx, player.vy);
                 if (vmag > maxV) { player.vx = player.vx / vmag * maxV; player.vy = player.vy / vmag * maxV; }
                 player.x += player.vx * dtgs;
