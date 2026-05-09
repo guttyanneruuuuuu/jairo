@@ -344,11 +344,11 @@
     <div id="ui-layer">
         <div class="hud-top">
             <div class="stat-group">
-                <span class="label">Distance</span>
+                <span id="label-distance" class="label">Distance</span>
                 <span id="score-value" class="value">0</span>
             </div>
             <div id="combo-container" class="stat-group">
-                <span class="label">Combo</span>
+                <span id="label-combo" class="label">Combo</span>
                 <span id="combo-value" class="value">x0</span>
             </div>
         </div>
@@ -377,15 +377,15 @@
 
             <div id="score-display" class="score-display" style="display:none;">
                 <div>
-                    <span class="label">Score</span>
+                    <span id="label-score" class="label">Score</span>
                     <span class="num" id="final-score">0</span>
                 </div>
                 <div>
-                    <span class="label">Max Combo</span>
+                    <span id="label-max-combo" class="label">Max Combo</span>
                     <span class="num combo" id="final-combo">0</span>
                 </div>
                 <div>
-                    <span class="label">Best</span>
+                    <span id="label-best" class="label">Best</span>
                     <span class="num best" id="final-best">0</span>
                 </div>
             </div>
@@ -427,15 +427,70 @@
         const finalBest  = document.getElementById('final-best');
         const hintText = document.getElementById('hint-text');
         const uiLayer = document.getElementById('ui-layer');
+        const labelDistance = document.getElementById('label-distance');
+        const labelCombo = document.getElementById('label-combo');
+        const labelScore = document.getElementById('label-score');
+        const labelMaxCombo = document.getElementById('label-max-combo');
+        const labelBest = document.getElementById('label-best');
 
         // ========== Constants ==========
         const PLAYER_RADIUS = 18;
         const SHIELD_DURATION = 4500;       // ms
         const SLOW_DURATION = 2500;         // ms
         const SLOW_FACTOR = 0.35;
-        const COMBO_TIMEOUT = 2500;         // ms
+        const COMBO_TIMEOUT = 3000;         // ms
         const PLAYER_TOUCH_OFFSET = 60;     // finger -> ship offset on mobile
         const HISCORE_KEY = 'galaxyDrift_hiscore_v2';
+        const TILT_DEADZONE = 0.08;
+        const TILT_SMOOTH = 0.22;
+
+        const localeParam = new URLSearchParams(window.location.search).get('locale');
+        const locale = localeParam === 'en' ? 'en' : 'ja';
+        const I18N = {
+            ja: {
+                title: 'GALAXY DRIFT: OVERDRIVE',
+                menuTitle: 'GALAXY<br>DRIFT',
+                menuDesc: '深宇宙を駆け抜けろ。<br><span class="y">エネルギーコア</span>でコンボを繋ぎ、<br><span class="highlight">シールド</span>で無敵に、<span class="p">マグネット</span>で吸引、<br><span class="v">スロー</span>でピンチを切り抜けろ。',
+                start: 'MISSION START',
+                retry: 'RETRY',
+                missionFailed: 'MISSION FAILED',
+                gameOverDesc: '宇宙の塵となりました。<br>もう一度ミッションへ。',
+                labelDistance: 'Distance',
+                labelCombo: 'Combo',
+                labelScore: 'Score',
+                labelMaxCombo: 'Max Combo',
+                labelBest: 'Best',
+                touch: 'タッチ操作',
+                tilt: '傾き操作',
+                hintPc: 'PC: MOUSE / WASD+ARROW + SPACE/CLICK = SLOW',
+                hintTouch: 'TOUCH: DRAG SHIP / TAP CENTER = SLOW',
+                hintTilt: 'TILT: MOVE DEVICE / TAP CENTER = SLOW',
+                tiltPermission: '傾き操作の許可が必要です',
+                shieldText: 'SHIELD'
+            },
+            en: {
+                title: 'GALAXY DRIFT: OVERDRIVE',
+                menuTitle: 'GALAXY<br>DRIFT',
+                menuDesc: 'Break through deep space.<br>Chain <span class="y">Energy Cores</span> for combos,<br>use <span class="highlight">Shield</span> for invulnerability,<span class="p">Magnet</span> for pull,<br>and <span class="v">Slow</span> to survive danger.',
+                start: 'MISSION START',
+                retry: 'RETRY',
+                missionFailed: 'MISSION FAILED',
+                gameOverDesc: 'You were reduced to cosmic dust.<br>Try the mission again.',
+                labelDistance: 'Distance',
+                labelCombo: 'Combo',
+                labelScore: 'Score',
+                labelMaxCombo: 'Max Combo',
+                labelBest: 'Best',
+                touch: 'Touch',
+                tilt: 'Tilt',
+                hintPc: 'PC: MOUSE / WASD+ARROW + SPACE/CLICK = SLOW',
+                hintTouch: 'TOUCH: DRAG SHIP / TAP CENTER = SLOW',
+                hintTilt: 'TILT: MOVE DEVICE / TAP CENTER = SLOW',
+                tiltPermission: 'Tilt permission is required',
+                shieldText: 'SHIELD'
+            }
+        };
+        const t = (key) => I18N[locale][key] ?? I18N.ja[key] ?? key;
 
         // ========== State ==========
         let state = 'MENU';                 // MENU / PLAYING / GAMEOVER
@@ -452,6 +507,8 @@
         let slowCharges = 0;                // available slow uses
         let hiscore = 0;
         let scoreFlash = 0;
+        let timeSinceDefensePickup = 0;
+        let nextSlowChargeScore = 3200;
 
         // ========== Input ==========
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -462,6 +519,7 @@
         // Tilt input
         let tiltX = 0, tiltY = 0;
         let tiltCalibX = 0, tiltCalibY = 0, tiltCalibrated = false;
+        const keyInput = { left: false, right: false, up: false, down: false };
 
         // ========== Player ==========
         const player = {
@@ -513,6 +571,7 @@
 
         // ========== Init ==========
         function init() {
+            applyLocale();
             window.addEventListener('resize', onResize);
             window.addEventListener('orientationchange', onResize);
             onResize();
@@ -529,6 +588,10 @@
             // Slow trigger
             window.addEventListener('keydown', e => {
                 if (e.code === 'Space') { e.preventDefault(); triggerSlow(); }
+                handleKeyInput(e.code, true);
+            });
+            window.addEventListener('keyup', e => {
+                handleKeyInput(e.code, false);
             });
             canvas.addEventListener('click', () => { if (state === 'PLAYING') triggerSlow(); });
             slowBtn.addEventListener('touchstart', (e) => {
@@ -540,16 +603,19 @@
             // Control mode (mobile)
             if (isMobile) {
                 ctrlSelect.classList.add('show');
-                hintText.textContent = 'TOUCH: DRAG SHIP / TAP CENTER = SLOW';
+                updateHintText();
                 document.querySelectorAll('.ctrl-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
                         controlMode = btn.dataset.ctrl;
+                        updateHintText();
                     });
                 });
                 // default: touch
                 document.querySelector('.ctrl-btn[data-ctrl="touch"]').classList.add('active');
+            } else {
+                updateHintText();
             }
 
             startBtn.addEventListener('click', handleStart);
@@ -573,6 +639,31 @@
         }
         function saveHiscore() {
             try { localStorage.setItem(HISCORE_KEY, String(Math.floor(hiscore))); } catch(e) {}
+        }
+
+        function applyLocale() {
+            document.documentElement.lang = locale;
+            document.title = t('title');
+            menuTitle.innerHTML = t('menuTitle');
+            menuDesc.innerHTML = t('menuDesc');
+            labelDistance.textContent = t('labelDistance');
+            labelCombo.textContent = t('labelCombo');
+            labelScore.textContent = t('labelScore');
+            labelMaxCombo.textContent = t('labelMaxCombo');
+            labelBest.textContent = t('labelBest');
+            startBtn.textContent = t('start');
+            const touchBtn = document.querySelector('.ctrl-btn[data-ctrl="touch"]');
+            const tiltBtn = document.querySelector('.ctrl-btn[data-ctrl="tilt"]');
+            if (touchBtn) touchBtn.textContent = t('touch');
+            if (tiltBtn) tiltBtn.textContent = t('tilt');
+        }
+
+        function updateHintText() {
+            if (!isMobile) {
+                hintText.textContent = t('hintPc');
+                return;
+            }
+            hintText.textContent = controlMode === 'tilt' ? t('hintTilt') : t('hintTouch');
         }
 
         function createStars() {
@@ -608,6 +699,13 @@
         }
 
         // ========== Input handlers ==========
+        function handleKeyInput(code, isDown) {
+            if (code === 'ArrowLeft' || code === 'KeyA') keyInput.left = isDown;
+            else if (code === 'ArrowRight' || code === 'KeyD') keyInput.right = isDown;
+            else if (code === 'ArrowUp' || code === 'KeyW') keyInput.up = isDown;
+            else if (code === 'ArrowDown' || code === 'KeyS') keyInput.down = isDown;
+        }
+
         function handleMouseMove(e) {
             if (controlMode !== 'mouse') return;
             // PC: ship follows cursor directly
@@ -648,8 +746,11 @@
             const gx = (e.gamma || 0) - tiltCalibX;   // left/right
             const gy = (e.beta  || 0) - tiltCalibY;   // forward/back
             // Normalize: ±18deg = max
-            tiltX = Math.max(-1, Math.min(1, gx / 18));
-            tiltY = Math.max(-1, Math.min(1, gy / 18));
+            const rawX = Math.max(-1, Math.min(1, gx / 18));
+            const rawY = Math.max(-1, Math.min(1, gy / 18));
+            const dz = (v) => Math.abs(v) < TILT_DEADZONE ? 0 : v;
+            tiltX += (dz(rawX) - tiltX) * TILT_SMOOTH;
+            tiltY += (dz(rawY) - tiltY) * TILT_SMOOTH;
         }
 
         async function enableTilt() {
@@ -657,7 +758,7 @@
                 typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     const r = await DeviceOrientationEvent.requestPermission();
-                    if (r !== 'granted') { alert('傾き操作の許可が必要です'); return false; }
+                    if (r !== 'granted') { alert(t('tiltPermission')); return false; }
                 } catch (err) { console.error(err); return false; }
             }
             window.addEventListener('deviceorientation', handleOrientation);
@@ -681,9 +782,12 @@
             comboTimer = 0; shieldTimer = 0; slowTimer = 0; magnetTimer = 0;
             invulnGrace = 1500;
             elapsed = 0;
+            timeSinceDefensePickup = 0;
+            nextSlowChargeScore = 3200;
             speedMul = 1;
             timeScale = 1;
             slowCharges = 1;     // start with one charge
+            spawnAccObs = 0; spawnAccEnergy = 0; spawnAccShield = 0; spawnAccMagnet = 0; spawnAccSlow = 0;
             obstacles = []; items = []; particles = [];
             player.trail = [];
             player.x = window.innerWidth / 2;
@@ -702,8 +806,12 @@
             setTimeout(() => overlay.style.display = 'none', 400);
 
             // Reset menu styling for retry
+            menuTitle.innerHTML = t('menuTitle');
             menuTitle.style.background = 'linear-gradient(to bottom, #fff 30%, var(--primary))';
             menuTitle.style.webkitBackgroundClip = 'text';
+            menuDesc.innerHTML = t('menuDesc');
+            menuDesc.classList.remove('compact');
+            startBtn.textContent = t('start');
         }
 
         function gameOver() {
@@ -717,16 +825,16 @@
             if (score > hiscore) { hiscore = Math.floor(score); saveHiscore(); }
 
             setTimeout(() => {
-                menuTitle.textContent = 'MISSION FAILED';
                 menuTitle.style.background = 'linear-gradient(to bottom, #fff, #ff4b2b)';
                 menuTitle.style.webkitBackgroundClip = 'text';
                 menuDesc.classList.add('compact');
-                menuDesc.innerHTML = '宇宙の塵となりました。<br>もう一度ミッションへ。';
+                menuTitle.textContent = t('missionFailed');
+                menuDesc.innerHTML = t('gameOverDesc');
                 scoreDisplay.style.display = 'flex';
                 finalScore.textContent = Math.floor(score).toLocaleString();
                 finalCombo.textContent = 'x' + maxCombo;
                 finalBest.textContent  = Math.floor(hiscore).toLocaleString();
-                startBtn.textContent = 'RETRY';
+                startBtn.textContent = t('retry');
 
                 overlay.style.display = 'flex';
                 requestAnimationFrame(() => overlay.style.opacity = '1');
@@ -754,38 +862,54 @@
         function updateSlowBtn() {
             slowBtn.innerHTML = `SLOW<br>x${slowCharges}`;
             slowBtn.classList.toggle('disabled', slowCharges <= 0 || slowTimer > 0);
-            // Show button only on touch/tilt control
-            slowBtn.style.display = (isMobile && state === 'PLAYING') ? 'flex' : (state === 'PLAYING' ? 'flex' : 'none');
+            // Show button only on mobile play
+            slowBtn.style.display = (isMobile && state === 'PLAYING') ? 'flex' : 'none';
         }
 
         // ========== Spawning ==========
         let spawnAccObs = 0, spawnAccEnergy = 0, spawnAccShield = 0, spawnAccMagnet = 0, spawnAccSlow = 0;
+        function randomSpawnX(avoidX, avoidRadius) {
+            let x = Math.random() * (window.innerWidth - 80) + 40;
+            if (avoidX == null || !Number.isFinite(avoidRadius)) return x;
+            for (let i = 0; i < 8 && Math.abs(x - avoidX) < avoidRadius; i++) {
+                x = Math.random() * (window.innerWidth - 80) + 40;
+            }
+            return x;
+        }
+
         function spawnEntities(dt) {
             // dt is real (unscaled) ms
             const t = elapsed / 1000; // seconds
-            speedMul = 1 + Math.min(2.0, t / 35);  // caps around 3x at 70s
+            const p = Math.min(1, t / 85);
+            speedMul = 1 + p * 1.65;               // caps around 2.65x
+            const obstacleRate = 0.032 + p * 0.042;
+            const energyRate = 0.00125 - p * 0.00012;
+            const defensePity = Math.min(1.4, timeSinceDefensePickup / 18000);
+            const shieldRate = 0.000075 + defensePity * 0.000035;
+            const magnetRate = 0.00005 + p * 0.00001;
+            const slowRate = 0.00004 + defensePity * 0.00003;
 
             // Obstacles: spawn rate scales with speedMul, with patterns
-            spawnAccObs += dt * (0.045 + speedMul * 0.025);
+            spawnAccObs += dt * (obstacleRate + speedMul * 0.016);
             while (spawnAccObs > 1) {
                 spawnAccObs -= 1;
                 spawnObstacle(t);
             }
 
-            // Energy core every ~0.9s
-            spawnAccEnergy += dt * 0.0011;
+            // Energy core
+            spawnAccEnergy += dt * energyRate;
             while (spawnAccEnergy > 1) { spawnAccEnergy -= 1; spawnItem('energy'); }
 
-            // Shield every ~12s
-            spawnAccShield += dt * 0.000085;
+            // Shield
+            spawnAccShield += dt * shieldRate;
             while (spawnAccShield > 1) { spawnAccShield -= 1; spawnItem('shield'); }
 
-            // Magnet every ~18s
-            spawnAccMagnet += dt * 0.000055;
+            // Magnet
+            spawnAccMagnet += dt * magnetRate;
             while (spawnAccMagnet > 1) { spawnAccMagnet -= 1; spawnItem('magnet'); }
 
-            // Slow charge every ~22s
-            spawnAccSlow += dt * 0.000045;
+            // Slow charge
+            spawnAccSlow += dt * slowRate;
             while (spawnAccSlow > 1) { spawnAccSlow -= 1; spawnItem('slow'); }
         }
 
@@ -793,14 +917,17 @@
             // Pattern selection unlocked over time
             const r = Math.random();
             let pattern = 'straight';
-            if (tSec > 15 && r < 0.2) pattern = 'sine';
-            else if (tSec > 30 && r < 0.35) pattern = 'homing';
-            else if (tSec > 45 && r < 0.5) pattern = 'cluster';
+            if (tSec > 14 && r < 0.24) pattern = 'sine';
+            else if (tSec > 34 && r < 0.36) pattern = 'homing';
+            else if (tSec > 52 && r < 0.5) pattern = 'cluster';
+
+            const homingCount = obstacles.reduce((n, o) => n + (o.pattern === 'homing' ? 1 : 0), 0);
+            if (pattern === 'homing' && homingCount >= 2) pattern = 'sine';
 
             if (pattern === 'cluster') {
                 // small cluster of 3
-                const cx = Math.random() * (window.innerWidth - 120) + 60;
-                const baseSpeed = (Math.random() * 80 + 180) * speedMul;
+                const cx = randomSpawnX(player.x, 120);
+                const baseSpeed = (Math.random() * 70 + 175) * speedMul;
                 for (let i = -1; i <= 1; i++) {
                     pushObstacle({
                         x: cx + i * 55,
@@ -818,8 +945,8 @@
             }
 
             const size = Math.random() * 28 + 22;
-            const x = Math.random() * window.innerWidth;
-            const speed = (Math.random() * 80 + 200) * speedMul;
+            const x = randomSpawnX(player.x, Math.min(220, 90 + tSec * 1.8));
+            const speed = (Math.random() * 75 + 190) * speedMul;
             const o = {
                 x, y: -size * 2,
                 size,
@@ -835,8 +962,8 @@
                 grazed: false
             };
             if (pattern === 'homing') {
-                o.vy = speed * 0.7;   // a bit slower so player can dodge
-                o.homing = 0.6;       // homing strength factor
+                o.vy = speed * 0.62;   // slower so player can dodge
+                o.homing = 0.42;       // homing strength factor
             }
             pushObstacle(o);
         }
@@ -844,9 +971,10 @@
 
         function spawnItem(type) {
             const sizes = { energy: 11, shield: 17, magnet: 15, slow: 15 };
+            const avoidRadius = type === 'energy' ? 0 : 90;
             items.push({
                 type,
-                x: Math.random() * (window.innerWidth - 80) + 40,
+                x: randomSpawnX(player.x, avoidRadius),
                 y: -50,
                 size: sizes[type],
                 speed: (type === 'energy' ? 220 : 200) * Math.min(2, speedMul),
@@ -879,6 +1007,7 @@
             if (state !== 'PLAYING') return;
 
             elapsed += dtMs;
+            timeSinceDefensePickup += dtMs;
             spawnEntities(dtMs);
 
             // Time-scaled dt for game objects
@@ -900,6 +1029,12 @@
 
             // Score
             score += 0.04 * dtMs * speedMul;
+            if (score >= nextSlowChargeScore) {
+                slowCharges = Math.min(3, slowCharges + 1);
+                nextSlowChargeScore += 3600 + Math.min(2800, elapsed * 0.02);
+                updateSlowBtn();
+                spawnFloat(player.x, player.y - 42, '+ SLOW', varColor('--slow'));
+            }
             scoreEl.textContent = Math.floor(score).toLocaleString();
             if (scoreFlash > 0) { scoreFlash -= dtMs; }
 
@@ -908,7 +1043,13 @@
             // ========== Player movement ==========
             // Determine target position from input
             let tx = player.x, ty = player.y;
-            if (controlMode === 'tilt') {
+            const kx = (keyInput.right ? 1 : 0) - (keyInput.left ? 1 : 0);
+            const ky = (keyInput.down ? 1 : 0) - (keyInput.up ? 1 : 0);
+            if (kx !== 0 || ky !== 0) {
+                const d = Math.hypot(kx, ky) || 1;
+                tx = player.x + (kx / d) * 280;
+                ty = player.y + (ky / d) * 280;
+            } else if (controlMode === 'tilt') {
                 // tilt -> velocity additive
                 tx = player.x + tiltX * 240;
                 ty = player.y + tiltY * 200;
@@ -994,10 +1135,10 @@
                 // Graze detection (close miss)
                 if (!o.grazed && dist < hitDist + 20 && dist > hitDist) {
                     o.grazed = true;
-                    score += 25 * (1 + combo * 0.05);
+                    score += 35 * (1 + combo * 0.04);
                     scoreFlash = 200;
                     sfx.graze();
-                    spawnFloat(o.x, o.y, '+25', '#fff');
+                    spawnFloat(o.x, o.y, '+35', '#fff');
                 }
 
                 if (dist < hitDist) {
@@ -1044,22 +1185,24 @@
                 if (dist < PLAYER_RADIUS + it.size + 6) {
                     if (it.type === 'energy') {
                         addCombo();
-                        const gain = Math.floor(120 * (1 + combo * 0.15));
+                        const gain = Math.min(720, Math.floor(95 * (1 + combo * 0.11)));
                         score += gain;
                         sfx.pickup();
                         createExplosion(it.x, it.y, varColor('--secondary'), 14, 6);
                         spawnFloat(it.x, it.y, '+' + gain, varColor('--secondary'));
                     } else if (it.type === 'shield') {
                         shieldTimer = SHIELD_DURATION;
+                        timeSinceDefensePickup = 0;
                         sfx.shield();
                         createExplosion(it.x, it.y, varColor('--shield'), 28, 9);
-                        spawnFloat(it.x, it.y, 'SHIELD', varColor('--shield'));
+                        spawnFloat(it.x, it.y, t('shieldText'), varColor('--shield'));
                     } else if (it.type === 'magnet') {
                         magnetTimer = 7000;
                         sfx.magnet();
                         createExplosion(it.x, it.y, varColor('--magnet'), 20, 8);
                         spawnFloat(it.x, it.y, 'MAGNET', varColor('--magnet'));
                     } else if (it.type === 'slow') {
+                        timeSinceDefensePickup = 0;
                         slowCharges = Math.min(3, slowCharges + 1);
                         updateSlowBtn();
                         sfx.slow();
