@@ -445,7 +445,9 @@
         const TILT_SMOOTH = 0.22;
 
         const localeParam = new URLSearchParams(window.location.search).get('locale');
-        const locale = localeParam === 'en' ? 'en' : 'ja';
+        const browserLocale = (navigator.language || 'en').toLowerCase();
+        const fallbackLocale = browserLocale.startsWith('ja') ? 'ja' : 'en';
+        const locale = (localeParam === 'ja' || localeParam === 'en') ? localeParam : fallbackLocale;
         const I18N = {
             ja: {
                 title: 'GALAXY DRIFT: OVERDRIVE',
@@ -490,7 +492,7 @@
                 shieldText: 'SHIELD'
             }
         };
-        const t = (key) => I18N[locale][key] ?? I18N.ja[key] ?? key;
+        const t = (key) => I18N[locale][key] ?? I18N.en[key] ?? I18N.ja[key] ?? key;
 
         // ========== State ==========
         let state = 'MENU';                 // MENU / PLAYING / GAMEOVER
@@ -870,7 +872,7 @@
         let spawnAccObs = 0, spawnAccEnergy = 0, spawnAccShield = 0, spawnAccMagnet = 0, spawnAccSlow = 0;
         function randomSpawnX(avoidX, avoidRadius) {
             let x = Math.random() * (window.innerWidth - 80) + 40;
-            if (avoidX == null || !Number.isFinite(avoidRadius)) return x;
+            if ((avoidX === null || avoidX === undefined) || !Number.isFinite(avoidRadius)) return x;
             for (let i = 0; i < 8 && Math.abs(x - avoidX) < avoidRadius; i++) {
                 x = Math.random() * (window.innerWidth - 80) + 40;
             }
@@ -921,8 +923,10 @@
             else if (tSec > 34 && r < 0.36) pattern = 'homing';
             else if (tSec > 52 && r < 0.5) pattern = 'cluster';
 
-            const homingCount = obstacles.reduce((n, o) => n + (o.pattern === 'homing' ? 1 : 0), 0);
-            if (pattern === 'homing' && homingCount >= 2) pattern = 'sine';
+            if (pattern === 'homing') {
+                const homingCount = obstacles.reduce((n, o) => n + (o.pattern === 'homing' ? 1 : 0), 0);
+                if (homingCount >= 2) pattern = 'sine';
+            }
 
             if (pattern === 'cluster') {
                 // small cluster of 3
